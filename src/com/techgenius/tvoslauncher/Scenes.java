@@ -18,6 +18,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.text.TextPaint;
 import android.view.View;
 import java.io.InputStream;
@@ -751,6 +752,10 @@ public final class Scenes {
         private int folderFlipCounter = 0;
         /** Hour whose Time-of-Day artwork is on screen, so it swaps on the hour. */
         private int lastTodHour = -1;
+        /** Wallpaper luminance behind the clock band, cached per bitmap, so the clock can flip
+         *  between the white glass look and a solid dark one the way iOS does. */
+        private Bitmap clockLumBmp;
+        private float clockLum = 0.35f;
 
         private final Paint bmpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Paint shadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1242,6 +1247,19 @@ public final class Scenes {
 
             // 2. Scene shade gradient
             Spec sp = ls.spec;
+
+            // Clock colour follows the wallpaper it sits on: bright artwork gets a solid dark
+            // clock and dark text (iOS behaviour), dark artwork keeps the frosted white glass.
+            // A scene that explicitly asks for a dark clock still wins.
+            if (clockLumBmp != ls.bg) {
+                clockLumBmp = ls.bg;
+                clockLum = topBandLuminance(ls.bg, w, h);
+                Log.d("TVOSCLOCK", "lum=" + clockLum + " autoDark=" + (clockLum > 0.52f));
+            }
+            boolean autoDark = clockLum > 0.52f;
+            boolean darkClock = sp.darkClock || autoDark;
+            boolean solidClock = autoDark && !sp.darkClock;
+            boolean darkText = sp.darkDate || autoDark;
             if ("water".equals(sp.id)) {
                 shadePaint.setShader(new LinearGradient(0, 0, 0, h,
                         new int[]{Color.argb(56, 14, 22, 40), Color.argb(15, 14, 22, 40), Color.argb(128, 0, 0, 0)},
@@ -1351,12 +1369,19 @@ public final class Scenes {
                 ls.glassShader.setLocalMatrix(shaderMatrix);
                 clockFillPaint.setShader(ls.glassShader);
             }
+            if (solidClock) {
+                // Bright wallpaper: solid ink instead of refractive glass, so the digits stay legible.
+                clockFillPaint.setShader(null);
+                clockFillPaint.setColor(0xFF11141B);
+                clockWetPaint.setShader(null);
+                clockWetPaint.setColor(0xE611141B);
+            }
 
             // Frosted vertical gradient fill + crisp outer rim matching duo.png
             float topGradY = baselineY - visualCapH;
             clockFrostPaint.setShader(new LinearGradient(
                     0, topGradY, 0, baselineY,
-                    sp.darkClock
+                    darkClock
                             ? new int[]{Color.argb(38, 255, 255, 255), Color.argb(68, 255, 255, 255), Color.argb(118, 255, 255, 255)}
                             : new int[]{Color.argb(52, 218, 224, 255), Color.argb(86, 236, 232, 255), Color.argb(138, 255, 242, 252)},
                     new float[]{0f, 0.52f, 1f},
@@ -1365,7 +1390,7 @@ public final class Scenes {
             clockStrokePaint.setStrokeWidth(Math.max(1.7f, (isDuo ? 2.1f : 1.2f) * u));
             clockStrokePaint.setShader(new LinearGradient(
                     0, topGradY, 0, baselineY,
-                    sp.darkClock
+                    darkClock
                             ? new int[]{Color.argb(210, 255, 255, 255), Color.argb(160, 255, 255, 255), Color.argb(230, 255, 255, 255)}
                             : new int[]{Color.argb(228, 244, 248, 255), Color.argb(185, 232, 236, 255), Color.argb(250, 255, 255, 255)},
                     new float[]{0f, 0.5f, 1f},
@@ -1378,7 +1403,7 @@ public final class Scenes {
                 canvas.save();
                 canvas.clipRect(0, 0, w, waterY);
                 drawStylizedClock(canvas, timeStr, clockX, baselineY, scaleY, rawCapH, clockPx, u,
-                        isDuo, isRounded, false, ls, sp.darkClock);
+                        isDuo, isRounded, false, ls, darkClock, solidClock);
                 canvas.restore();
 
                 // Below waterline: blurred wet reflection clock
@@ -1391,11 +1416,11 @@ public final class Scenes {
                     clockWetPaint.setShader(ls.glassWetShader);
                 }
                 drawStylizedClock(canvas, timeStr, clockX, baselineY, scaleY, rawCapH, clockPx, u,
-                        isDuo, isRounded, true, ls, sp.darkClock);
+                        isDuo, isRounded, true, ls, darkClock, solidClock);
                 canvas.restore();
             } else {
                 drawStylizedClock(canvas, timeStr, clockX, baselineY, scaleY, rawCapH, clockPx, u,
-                        isDuo, isRounded, false, ls, sp.darkClock);
+                        isDuo, isRounded, false, ls, darkClock, solidClock);
             }
 
             // 4. Foreground cutout (mountain ridge / volcano / fog hills / rainforest canopy)
@@ -1407,7 +1432,7 @@ public final class Scenes {
             String greeting = buildGreeting(ctx);
             greetPaint.setTextSize(greetPx);
             greetPaint.setLetterSpacing(0.015f);
-            if (sp.darkDate) {
+            if (darkText) {
                 greetPaint.setColor(Color.argb(185, 22, 32, 29));
                 greetPaint.clearShadowLayer();
             } else {
@@ -1438,7 +1463,7 @@ public final class Scenes {
             }
             datePaint.setTextSize(datePx);
             datePaint.setLetterSpacing(0.01f);
-            if (sp.darkDate) {
+            if (darkText) {
                 datePaint.setColor(Color.argb(225, 22, 32, 29));
                 datePaint.clearShadowLayer();
             } else {
@@ -1576,7 +1601,7 @@ public final class Scenes {
         private void drawStylizedClock(Canvas canvas, String timeStr, float startX, float baselineY,
                                        float scaleY, float rawCapH, float clockPx, float u,
                                        boolean isDuo, boolean isRounded, boolean wet,
-                                       LoadedScene ls, boolean darkClock) {
+                                       LoadedScene ls, boolean darkClock, boolean solidClock) {
             TextPaint fillP = wet ? clockWetPaint : clockFillPaint;
             int colonIdx = (isDuo || isRounded) ? timeStr.indexOf(':') : -1;
 
@@ -1602,7 +1627,7 @@ public final class Scenes {
                 duoClockPath.addCircle(colonCx, dotY1, dotR, android.graphics.Path.Direction.CW);
                 duoClockPath.addCircle(colonCx, dotY2, dotR, android.graphics.Path.Direction.CW);
 
-                if (!wet) {
+                if (!wet && !solidClock) {
                     clockShadowPaint.setAlpha(38);
                     canvas.save();
                     canvas.translate(0f, 3f * u);
@@ -1616,8 +1641,16 @@ public final class Scenes {
 
                 // 2. Frosted translucent vertical gradient fill (milky near bottom, airy near top, matching screen_duo12.png)
                 //    with white outer outline removed for cleaner iPhone Duo similarity.
-                clockFrostPaint.setAlpha(wet ? 120 : 235);
-                canvas.drawPath(duoClockPath, clockFrostPaint);
+                if (solidClock) {
+                    // Solid ink on bright artwork: a hairline light rim keeps the digits from
+                    // reading as flat black cut-outs.
+                    clockStrokePaint.setAlpha(wet ? 30 : 70);
+                    clockStrokePaint.setStrokeWidth(Math.max(1.2f, 1.1f * u));
+                    canvas.drawPath(duoClockPath, clockStrokePaint);
+                } else {
+                    clockFrostPaint.setAlpha(wet ? 120 : 235);
+                    canvas.drawPath(duoClockPath, clockFrostPaint);
+                }
                 return;
             }
 
@@ -1628,12 +1661,12 @@ public final class Scenes {
 
             if (colonIdx < 0) {
                 // Tall Glass mode
-                if (!wet) {
+                if (!wet && !solidClock) {
                     canvas.drawText(timeStr, startX, baselineY + 4f * u, clockShadowPaint);
                 }
                 fillP.setAlpha(wet ? 158 : 255);
                 canvas.drawText(timeStr, startX, baselineY, fillP);
-                clockStrokePaint.setAlpha(wet ? 60 : 140);
+                clockStrokePaint.setAlpha(solidClock ? 70 : (wet ? 60 : 140));
                 canvas.drawText(timeStr, startX, baselineY, clockStrokePaint);
                 canvas.restore();
                 return;
@@ -1651,7 +1684,7 @@ public final class Scenes {
             float dotY2 = baselineY - rawCapH * 0.42f;
 
             // iPhone Rounded Lock Screen Clock
-            if (!wet) {
+            if (!wet && !solidClock) {
                 clockShadowPaint.setAlpha(46);
                 canvas.drawText(hrs, startX, baselineY + 3.5f * u, clockShadowPaint);
                 canvas.drawText(mins, minsX, baselineY + 3.5f * u, clockShadowPaint);
@@ -1663,13 +1696,43 @@ public final class Scenes {
             canvas.drawCircle(colonCx, dotY2, dotR, fillP);
 
             clockStrokePaint.setStrokeWidth(Math.max(1.5f, 1.4f * u));
-            clockStrokePaint.setAlpha(wet ? 65 : 165);
+            clockStrokePaint.setAlpha(solidClock ? 70 : (wet ? 65 : 165));
             canvas.drawText(hrs, startX, baselineY, clockStrokePaint);
             canvas.drawText(mins, minsX, baselineY, clockStrokePaint);
             canvas.drawCircle(colonCx, dotY1, dotR, clockStrokePaint);
             canvas.drawCircle(colonCx, dotY2, dotR, clockStrokePaint);
 
             canvas.restore();
+        }
+
+        /**
+         * Mean luminance (0..1) of the wallpaper band the clock and header sit in, sampled on the
+         * centre-cropped mapping so it reflects what is actually behind the text.
+         */
+        private float topBandLuminance(Bitmap b, int viewW, int viewH) {
+            if (b == null || b.isRecycled() || viewW <= 0 || viewH <= 0) return 0.35f;
+            try {
+                int bw = b.getWidth(), bh = b.getHeight();
+                float scale = Math.max((float) viewW / bw, (float) viewH / bh);
+                float sw = viewW / scale, sh = viewH / scale;
+                int sx = Math.max(0, Math.round((bw - sw) * 0.5f));
+                int sy = Math.max(0, Math.round((bh - sh) * 0.5f));
+                int x0 = sx + Math.round(sw * 0.12f), x1 = Math.min(bw, sx + Math.round(sw * 0.88f));
+                int y0 = sy + Math.round(sh * 0.02f), y1 = Math.min(bh, sy + Math.round(sh * 0.30f));
+                int stepX = Math.max(1, (x1 - x0) / 24), stepY = Math.max(1, (y1 - y0) / 12);
+                long sum = 0;
+                int n = 0;
+                for (int y = y0; y < y1; y += stepY) {
+                    for (int x = x0; x < x1; x += stepX) {
+                        int c = b.getPixel(x, y);
+                        sum += (299L * ((c >> 16) & 255) + 587L * ((c >> 8) & 255) + 114L * (c & 255)) / 1000L;
+                        n++;
+                    }
+                }
+                return n == 0 ? 0.35f : (float) sum / n / 255f;
+            } catch (Throwable t) {
+                return 0.35f;
+            }
         }
 
         private void drawCenterCrop(Canvas canvas, Bitmap bmp, int viewW, int viewH) {
