@@ -121,6 +121,7 @@ public class MainActivity extends Activity {
             "app.flicky",
             "com.brouken.player",
             "wishissue.wishybrowser",
+            "com.voyagerfiles",
             "org.localsend.localsend_app");
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
