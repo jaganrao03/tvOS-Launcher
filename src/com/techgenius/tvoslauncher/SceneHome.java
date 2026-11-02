@@ -870,6 +870,9 @@ final class SceneHome {
 
         dockEntries.addAll(visibleApps);
 
+        StringBuilder dockLog = new StringBuilder();
+        for (MainActivity.AppEntry e : dockEntries) dockLog.append(e.label).append("|");
+        android.util.Log.d("TVOSDOCK", "dock=" + dockLog + " apps=" + host.apps.size());
         // Add Gear tile
         MainActivity.AppEntry gearEntry = new MainActivity.AppEntry();
         gearEntry.key = GEAR_KEY;

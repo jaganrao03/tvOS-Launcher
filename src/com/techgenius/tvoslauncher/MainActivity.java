@@ -97,6 +97,24 @@ public class MainActivity extends Activity {
             "com.spotify.tv.android",
             "io.github.jqssun.airplay");
 
+    /** OEM/system apps kept off the grid on first run; the retired launcher is hidden too. */
+    static final List<String> DEFAULT_HIDDEN = Arrays.asList(
+            "com.android.tv.settings",
+            "com.vt.tv.tvcenter",
+            "com.vt.tv.mediacenter",
+            "com.vt.tv.mobiledeviceconnectiontips",
+            "com.vt.tv.singlelisten",
+            "net.vidaatv.hisense.android.tv",
+            "com.mediatek.wwtv.tvcenter",
+            "com.mitv.gallery",
+            "com.gathin.tvhome");
+
+    /** Apps that live in "Other Apps" on first run, so the dock stays to Jagan's six. */
+    static final List<String> DEFAULT_OTHER = Arrays.asList(
+            "com.android.vending",
+            "com.gathin.photodream",
+            "ch.protonvpn.android");
+
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
     static final float FOCUS_SCALE = 1.2f;
@@ -3294,6 +3312,10 @@ public class MainActivity extends Activity {
 
         Set<String> hidden = prefs.getStringSet(PREF_HIDDEN, Collections.emptySet());
         Set<String> other = prefs.getStringSet(PREF_OTHER, Collections.emptySet());
+        // First run (nothing hidden yet): keep the TV's OEM/system tiles off the grid, as the
+        // previous launcher did. Any later change by the user replaces this list entirely.
+        if (hidden.isEmpty()) hidden = new HashSet<>(DEFAULT_HIDDEN);
+        if (other.isEmpty()) other = new HashSet<>(DEFAULT_OTHER);
         Map<String, AppEntry> pool = new LinkedHashMap<>();
         for (AppEntry e : all.values()) {
             if (hidden.contains(e.key) || (e.pkg != null && hidden.contains(e.pkg))) {
