@@ -86,15 +86,15 @@ public class MainActivity extends Activity {
 
     /** Packages placed first (in this order) until the user rearranges the grid. */
     static final List<String> DEFAULT_ORDER = Arrays.asList(
-            "com.netflix.ninja",
-            "com.amazon.amazonvideo.livingroom",
-            "org.smarttube.stable",
-            "in.startv.hotstar",
-            "com.apple.atve.androidtv.appletv",
-            "com.spotify.tv.android",
-            "com.mitv.tvhome.mitvplus",
-            "com.google.android.youtube.tv",
+            "com.nuvio.tv",
+            "com.stremio.one",
+            "io.gh.reisxd.tizentube.cobalt",
             "org.videolan.vlc",
+            "com.netflix.ninja",
+            "com.playfy.tv",
+            "com.amazon.amazonvideo.livingroom",
+            "com.google.android.youtube.tv",
+            "com.spotify.tv.android",
             "io.github.jqssun.airplay");
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
@@ -226,6 +226,10 @@ public class MainActivity extends Activity {
     View launchTile;
     static MainActivity activeInstance;
     SceneHome sceneHome;
+
+    /** Left/right screen edges tinted with the focused app's colour (prefs edge_glow, 0-100, default 40). */
+    EdgeGlow edgeGlow;
+    int edgeGlowStrength;
     String activeLang;
     String activeLook;
 
@@ -568,6 +572,11 @@ public class MainActivity extends Activity {
 
         sceneHome = new SceneHome(this);
         root.addView(sceneHome.sceneView, match());
+
+        edgeGlow = new EdgeGlow(this);
+        edgeGlowStrength = Math.max(0, Math.min(100, prefs.getInt("edge_glow", 40)));
+        edgeGlow.setStrength(edgeGlowStrength);
+        root.addView(edgeGlow, match());
 
         heroBack = heroLayer();
         heroFront = heroLayer();
@@ -3467,6 +3476,12 @@ public class MainActivity extends Activity {
             sb.append(e.key);
         }
         prefs.edit().putString(PREF_ORDER, sb.toString()).apply();
+    }
+
+    /** edge_glow: tints both screen edges with the focused app's accent (0 fades them out). */
+    void tintEdge(int accent, boolean animate) {
+        if (edgeGlow == null || edgeGlowStrength <= 0) return;
+        edgeGlow.tint(accent, animate);
     }
 
     void setOtherApp(AppEntry a, boolean toOther) {

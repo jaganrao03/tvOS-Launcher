@@ -984,6 +984,7 @@ final class SceneHome {
             v.setForeground(has ? focusRing : null);
             if (has) {
                 focusedDockIdx = index;
+                host.tintEdge((isGear || isMore) ? 0 : a.color, true);
                 host.prefs.edit().putInt("last_dock_idx", index).apply();
                 if (moveDockIdx >= 0) {
                     updateDockTooltip(v, I18n.s(host,

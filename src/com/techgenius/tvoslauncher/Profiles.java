@@ -91,7 +91,7 @@ final class Profiles {
         if (out.isEmpty()) {
             Profile p1 = new Profile();
             p1.id = "p1";
-            p1.name = "Person 1";
+            p1.name = "Jagan";
             p1.color = 0;
             out.add(p1);
         }
