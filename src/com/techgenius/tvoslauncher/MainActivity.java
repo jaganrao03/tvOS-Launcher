@@ -115,6 +115,14 @@ public class MainActivity extends Activity {
             "com.gathin.photodream",
             "ch.protonvpn.android");
 
+    /** Utilities that belong in Other Apps rather than eating dock space, whatever the prefs say. */
+    static final List<String> ALWAYS_OTHER = Arrays.asList(
+            "app.fluffy",
+            "app.flicky",
+            "com.brouken.player",
+            "wishissue.wishybrowser",
+            "org.localsend.localsend_app");
+
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
     static final float FOCUS_SCALE = 1.2f;
@@ -3366,7 +3374,8 @@ public class MainActivity extends Activity {
         for (AppEntry e : all.values()) {
             if (hidden.contains(e.key) || (e.pkg != null && hidden.contains(e.pkg))) {
                 hiddenApps.add(e);
-            } else if (other.contains(e.key) || (e.pkg != null && other.contains(e.pkg))) {
+            } else if (other.contains(e.key) || (e.pkg != null && other.contains(e.pkg))
+                    || (e.pkg != null && ALWAYS_OTHER.contains(e.pkg))) {
                 otherApps.add(e);
             } else {
                 pool.put(e.key, e);
