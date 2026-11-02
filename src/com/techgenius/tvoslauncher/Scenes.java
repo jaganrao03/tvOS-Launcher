@@ -13,6 +13,7 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -756,9 +757,20 @@ public final class Scenes {
          *  between the white glass look and a solid dark one the way iOS does. */
         private Bitmap clockLumBmp;
         private float clockLum = 0.35f;
+        /** 0 on dark artwork .. 1 on bright artwork; drives the clock scrim and drop shadow. */
+        private float clockBrightness = 0f;
+        /**
+         * Above this wallpaper luminance the frosted white clock stops reading and the digits
+         * switch to dark ink. Measured over the clock's own region, so busy artwork mid-frame
+         * no longer loses the clock.
+         */
+        static final float AUTO_DARK_LUM = 0.72f;
 
         private final Paint bmpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Paint shadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        /** Soft halo behind the clock on bright artwork — keeps the white glass readable
+         *  while leaving the rest of the wallpaper untouched. */
+        private final Paint clockHaloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final TextPaint clockFillPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         private final TextPaint clockWetPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         private final TextPaint clockFrostPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -1251,12 +1263,16 @@ public final class Scenes {
             // Clock colour follows the wallpaper it sits on: bright artwork gets a solid dark
             // clock and dark text (iOS behaviour), dark artwork keeps the frosted white glass.
             // A scene that explicitly asks for a dark clock still wins.
+            // Sample the band the digits actually sit in (not the whole top strip): a dark
+            // horizon with a bright sky above it otherwise picks the wrong clock colour.
             if (clockLumBmp != ls.bg) {
                 clockLumBmp = ls.bg;
-                clockLum = topBandLuminance(ls.bg, w, h);
-                Log.d("TVOSCLOCK", "lum=" + clockLum + " autoDark=" + (clockLum > 0.52f));
+                clockLum = clockRegionLuminance(ls.bg, w, h);
+                clockBrightness = Math.min(1f, Math.max(0f, (clockLum - 0.30f) / 0.45f));
+                Log.d("TVOSCLOCK", "lum=" + clockLum + " bright=" + clockBrightness
+                        + " autoDark=" + (clockLum > AUTO_DARK_LUM));
             }
-            boolean autoDark = clockLum > 0.52f;
+            boolean autoDark = clockLum > AUTO_DARK_LUM;
             boolean darkClock = sp.darkClock || autoDark;
             boolean solidClock = autoDark && !sp.darkClock;
             boolean darkText = sp.darkDate || autoDark;
@@ -1269,11 +1285,24 @@ public final class Scenes {
                         new int[]{Color.argb(66, 30, 18, 12), Color.argb(20, 30, 18, 12), Color.argb(128, 0, 0, 0)},
                         new float[]{0f, 0.42f, 1f}, Shader.TileMode.CLAMP));
             } else {
+                // A faint top vignette that thickens as the artwork gets brighter — it holds the
+                // white clock legible without turning the wallpaper into a flat dark wash.
+                int topScrim = (int) (14 + clockBrightness * 40);
                 shadePaint.setShader(new LinearGradient(0, 0, 0, h,
-                        new int[]{Color.TRANSPARENT, Color.TRANSPARENT, Color.argb(128, 0, 0, 0)},
-                        new float[]{0f, 0.60f, 1f}, Shader.TileMode.CLAMP));
+                        new int[]{Color.argb(topScrim, 6, 8, 14), Color.TRANSPARENT, Color.argb(128, 0, 0, 0)},
+                        new float[]{0f, 0.48f, 1f}, Shader.TileMode.CLAMP));
             }
             canvas.drawRect(0, 0, w, h, shadePaint);
+
+            // 2b. Local halo behind the clock: a soft dark pool that only appears on artwork
+            // bright enough to swallow the frosted digits.
+            if (clockBrightness > 0.05f && !"water".equals(sp.id)) {
+                int halo = (int) (135 * clockBrightness);
+                clockHaloPaint.setShader(new RadialGradient(w * 0.5f, h * 0.25f, w * 0.58f,
+                        new int[]{Color.argb(halo, 4, 6, 12), Color.argb(halo / 3, 4, 6, 12), Color.TRANSPARENT},
+                        new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+                canvas.drawRect(0, 0, w, h, clockHaloPaint);
+            }
 
             // 3. Giant Glass Clock (iPhone Duo / Rounded / Tall Glass)
             float u = Math.min(w / 960f, h / 540f);
@@ -1370,11 +1399,13 @@ public final class Scenes {
                 clockFillPaint.setShader(ls.glassShader);
             }
             if (solidClock) {
-                // Bright wallpaper: solid ink instead of refractive glass, so the digits stay legible.
+                // Bright wallpaper: dark ink instead of refractive glass, so the digits stay
+                // legible. Slightly lifted off pure black and semi-opaque so it still reads as
+                // part of the artwork rather than a cut-out.
                 clockFillPaint.setShader(null);
-                clockFillPaint.setColor(0xFF11141B);
+                clockFillPaint.setColor(0xE6151820);
                 clockWetPaint.setShader(null);
-                clockWetPaint.setColor(0xE611141B);
+                clockWetPaint.setColor(0xD6151820);
             }
 
             // Frosted vertical gradient fill + crisp outer rim matching duo.png
@@ -1628,7 +1659,7 @@ public final class Scenes {
                 duoClockPath.addCircle(colonCx, dotY2, dotR, android.graphics.Path.Direction.CW);
 
                 if (!wet && !solidClock) {
-                    clockShadowPaint.setAlpha(38);
+                    clockShadowPaint.setAlpha((int) (38 + 100 * clockBrightness));
                     canvas.save();
                     canvas.translate(0f, 3f * u);
                     canvas.drawPath(duoClockPath, clockShadowPaint);
@@ -1644,7 +1675,7 @@ public final class Scenes {
                 if (solidClock) {
                     // Solid ink on bright artwork: a hairline light rim keeps the digits from
                     // reading as flat black cut-outs.
-                    clockStrokePaint.setAlpha(wet ? 30 : 70);
+                    clockStrokePaint.setAlpha(solidClock ? 120 : (wet ? 30 : 70));
                     clockStrokePaint.setStrokeWidth(Math.max(1.2f, 1.1f * u));
                     canvas.drawPath(duoClockPath, clockStrokePaint);
                 } else {
@@ -1666,7 +1697,7 @@ public final class Scenes {
                 }
                 fillP.setAlpha(wet ? 158 : 255);
                 canvas.drawText(timeStr, startX, baselineY, fillP);
-                clockStrokePaint.setAlpha(solidClock ? 70 : (wet ? 60 : 140));
+                clockStrokePaint.setAlpha(solidClock ? 120 : (wet ? 60 : 140));
                 canvas.drawText(timeStr, startX, baselineY, clockStrokePaint);
                 canvas.restore();
                 return;
@@ -1685,7 +1716,7 @@ public final class Scenes {
 
             // iPhone Rounded Lock Screen Clock
             if (!wet && !solidClock) {
-                clockShadowPaint.setAlpha(46);
+                clockShadowPaint.setAlpha((int) (46 + 100 * clockBrightness));
                 canvas.drawText(hrs, startX, baselineY + 3.5f * u, clockShadowPaint);
                 canvas.drawText(mins, minsX, baselineY + 3.5f * u, clockShadowPaint);
             }
@@ -1696,7 +1727,7 @@ public final class Scenes {
             canvas.drawCircle(colonCx, dotY2, dotR, fillP);
 
             clockStrokePaint.setStrokeWidth(Math.max(1.5f, 1.4f * u));
-            clockStrokePaint.setAlpha(solidClock ? 70 : (wet ? 65 : 165));
+            clockStrokePaint.setAlpha(solidClock ? 120 : (wet ? 65 : 165));
             canvas.drawText(hrs, startX, baselineY, clockStrokePaint);
             canvas.drawText(mins, minsX, baselineY, clockStrokePaint);
             canvas.drawCircle(colonCx, dotY1, dotR, clockStrokePaint);
@@ -1706,10 +1737,10 @@ public final class Scenes {
         }
 
         /**
-         * Mean luminance (0..1) of the wallpaper band the clock and header sit in, sampled on the
-         * centre-cropped mapping so it reflects what is actually behind the text.
+         * Wallpaper luminance (0..1) sampled over the region the clock occupies (x 14–86%,
+         * y 6–46%) on the centre-cropped mapping, so it reflects what is behind the digits.
          */
-        private float topBandLuminance(Bitmap b, int viewW, int viewH) {
+        private float clockRegionLuminance(Bitmap b, int viewW, int viewH) {
             if (b == null || b.isRecycled() || viewW <= 0 || viewH <= 0) return 0.35f;
             try {
                 int bw = b.getWidth(), bh = b.getHeight();
@@ -1717,9 +1748,9 @@ public final class Scenes {
                 float sw = viewW / scale, sh = viewH / scale;
                 int sx = Math.max(0, Math.round((bw - sw) * 0.5f));
                 int sy = Math.max(0, Math.round((bh - sh) * 0.5f));
-                int x0 = sx + Math.round(sw * 0.12f), x1 = Math.min(bw, sx + Math.round(sw * 0.88f));
-                int y0 = sy + Math.round(sh * 0.02f), y1 = Math.min(bh, sy + Math.round(sh * 0.30f));
-                int stepX = Math.max(1, (x1 - x0) / 24), stepY = Math.max(1, (y1 - y0) / 12);
+                int x0 = sx + Math.round(sw * 0.14f), x1 = Math.min(bw, sx + Math.round(sw * 0.86f));
+                int y0 = sy + Math.round(sh * 0.06f), y1 = Math.min(bh, sy + Math.round(sh * 0.46f));
+                int stepX = Math.max(1, (x1 - x0) / 28), stepY = Math.max(1, (y1 - y0) / 18);
                 long sum = 0;
                 int n = 0;
                 for (int y = y0; y < y1; y += stepY) {
