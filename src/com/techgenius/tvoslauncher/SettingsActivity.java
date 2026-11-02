@@ -900,7 +900,7 @@ public class SettingsActivity extends Activity {
                 });
 
         section(tr("CLASSIC BACKGROUND", "KLASİK ARKA PLAN"));
-        String curWall = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+        String curWall = Profiles.homePrefs(this).getString("wallpaper", MainActivity.TIME_OF_DAY_WALL_KEY);
         for (int i = 0; i < Scenes.CLASSIC_PHOTOS.length; i++) {
             final String photoFile = Scenes.CLASSIC_PHOTOS[i][0];
             final String wallKey = "photo:" + photoFile;
@@ -911,7 +911,7 @@ public class SettingsActivity extends Activity {
             });
         }
         row(tr("Ambient colour themes…", "Ortam renk temaları…"), () -> {
-            String k = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+            String k = Profiles.homePrefs(this).getString("wallpaper", MainActivity.TIME_OF_DAY_WALL_KEY);
             int idx = Arrays.asList(MainActivity.WALL_KEYS).indexOf(k);
             return MainActivity.wallName(this, Math.max(0, idx));
         }, () -> openSubMenu("ambient_themes"));
@@ -2053,7 +2053,7 @@ public class SettingsActivity extends Activity {
         mainHeadView.setText(tr("Ambient colour themes", "Ortam renk temaları"));
         backSubMenuRow();
         section(tr("AMBIENT THEMES", "ORTAM TEMALARI"));
-        String cur = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+        String cur = Profiles.homePrefs(this).getString("wallpaper", MainActivity.TIME_OF_DAY_WALL_KEY);
         for (int i = 0; i < MainActivity.WALL_KEYS.length; i++) {
             final String key = MainActivity.WALL_KEYS[i];
             final String name = MainActivity.wallName(this, i);

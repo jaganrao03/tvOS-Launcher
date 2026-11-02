@@ -540,7 +540,7 @@ public class SetupActivity extends Activity {
     /** Step 1: Choose Appearance (Night scenes vs Classic). Step 2: Choose Scenes or Classic Background. */
     void look() {
         boolean scenesMode = Scenes.isScenesLook(this);
-        String curWall = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+        String curWall = Profiles.homePrefs(this).getString("wallpaper", MainActivity.TIME_OF_DAY_WALL_KEY);
         if (lookSubStep == 0) {
             title(tr("Appearance", "G\u00f6r\u00fcn\u00fcm"));
             TextView s = subtitle(tr("Choose how you want your Home Screen to look.",

@@ -1424,6 +1424,8 @@ final class SceneHome {
                 return "com.google.android.youtube.tv.png";
             case "com.netflix.ninja":
                 return "com.netflix.ninja.png";
+            case "io.gh.reisxd.tizentube.cobalt":
+                return "com.google.android.youtube.tv.png";
             case "com.disney.disneyplus":
             case "in.startv.hotstar":
                 return "com.disney.disneyplus.png";

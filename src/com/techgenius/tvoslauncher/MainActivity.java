@@ -134,6 +134,11 @@ public class MainActivity extends Activity {
         return c.getSharedPreferences("app_custom_names", Context.MODE_PRIVATE);
     }
 
+    /** Bundled tile names for apps whose own label reads badly on a TV. */
+    private static final String[][] DEFAULT_APP_NAMES = {
+            {"io.gh.reisxd.tizentube.cobalt", "YouTube"},
+    };
+
     public static String getCustomAppName(Context c, String key, String pkg, String fallback) {
         SharedPreferences sp = customNamePrefs(c);
         if (key != null && !key.isEmpty()) {
@@ -143,6 +148,9 @@ public class MainActivity extends Activity {
         if (pkg != null && !pkg.isEmpty()) {
             String byPkg = sp.getString("pkg:" + pkg, null);
             if (byPkg != null && !byPkg.trim().isEmpty()) return byPkg.trim();
+            for (String[] row : DEFAULT_APP_NAMES) {
+                if (row[0].equals(pkg)) return row[1];
+            }
         }
         return fallback;
     }
@@ -300,7 +308,7 @@ public class MainActivity extends Activity {
         // prepared in the background while the window's views are built (~250 ms saved on 1 GHz TVs).
         java.util.concurrent.Future<?> appsTask = io.submit(this::loadApps);
         if (!Scenes.isScenesLook(this)) {
-            String wall = prefs.getString("wallpaper", "photo:tessellated-pavement.jpg");
+            String wall = prefs.getString("wallpaper", TIME_OF_DAY_WALL_KEY);
             wallPrefetch = new java.util.concurrent.FutureTask<>(() -> makeWallpaper(wall));
             wallPrefetchStyle = wall;
             new Thread((Runnable) wallPrefetch, "tvos-wallpaper").start();
@@ -450,7 +458,7 @@ public class MainActivity extends Activity {
         clearLaunchDim();
         boolean wasReturningFromSettings = returningFromSettings;
         if (!Scenes.isScenesLook(this)) {
-            String ws = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+            String ws = Profiles.homePrefs(this).getString("wallpaper", TIME_OF_DAY_WALL_KEY);
             if (!ws.equals(wallStyle) || wallView.getDrawable() == null
                     || (wasReturningFromSettings && ("custom".equals(ws) || FOLDER_SHUFFLE_WALL_KEY.equals(ws)))) {
                 wallStyle = ws;
@@ -582,7 +590,7 @@ public class MainActivity extends Activity {
         // soft; a slow drift keeps it alive without a per-frame blur on this weak GPU.
         wallView = new ImageView(this);
         wallView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        wallStyle = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
+        wallStyle = Profiles.homePrefs(this).getString("wallpaper", TIME_OF_DAY_WALL_KEY);
         if (!Scenes.isScenesLook(this)) {
             setWallpaper(wallStyle);
         }
@@ -1102,7 +1110,31 @@ public class MainActivity extends Activity {
         if (menuLayer != null && menuLayer.getChildCount() > 0) menuLayer.getChildAt(0).invalidate();
     }
 
+    /** Wallhaven-derived wallpaper set that follows the clock (see timeOfDayFiles). */
+    static final String TIME_OF_DAY_WALL_KEY = "timeofday";
+
+    /**
+     * The three wallpapers for this hour: day (08-16), golden (05-07 and 17-18),
+     * dusk (19-20), night (21-04). Files live in assets/backgrounds/.
+     */
+    static String[] timeOfDayFiles(int hour) {
+        String mood;
+        if (hour >= 8 && hour <= 16) mood = "day";
+        else if (hour >= 5 && hour <= 7) mood = "golden";
+        else if (hour >= 17 && hour <= 18) mood = "golden";
+        else if (hour >= 19 && hour <= 20) mood = "dusk";
+        else mood = "night";
+        return new String[]{"timeofday-" + mood + "-1.jpg", "timeofday-" + mood + "-2.jpg", "timeofday-" + mood + "-3.jpg"};
+    }
+
+    /** Which of the three files is showing: advances once an hour, and again the next day. */
+    static String timeOfDayFile(int hour, long nowMs) {
+        String[] files = timeOfDayFiles(hour);
+        return files[(int) ((nowMs / 3600000L) % files.length)];
+    }
+
     static final String[] WALL_KEYS = {
+        TIME_OF_DAY_WALL_KEY,
         "photo:tessellated-pavement.jpg",
         "photo:grose-valley.jpg",
         "photo:albury-storm.jpg",
@@ -1111,10 +1143,12 @@ public class MainActivity extends Activity {
         "aurora", "midnight", "sunset", "ocean", "graphite"
     };
     static final String[] WALL_NAMES = {
+        "Time of Day",
         "Tessellated Pavement", "Grose Valley", "Albury Storm", "Aresquiers Beach", "Vang Vieng Sunset",
         "Aurora", "Midnight", "Sunset", "Ocean", "Graphite"
     };
     static final String[] WALL_NAMES_TR = {
+        "G\u00fcn\u00fcn Saati",
         "Tessellated Pavement", "Grose Vadisi", "Albury F\u0131rt\u0131nas\u0131", "Aresquiers Plaj\u0131", "Vang Vieng G\u00fcn Bat\u0131m\u0131",
         "Kuzey I\u015f\u0131klar\u0131", "Gece Yar\u0131s\u0131", "G\u00fcn Bat\u0131m\u0131", "Okyanus", "Grafit"
     };
@@ -1128,6 +1162,7 @@ public class MainActivity extends Activity {
     static final String FOLDER_SHUFFLE_WALL_KEY = "folder_shuffle";
 
     Bitmap makeWallpaper(String style) {
+        android.util.Log.d("TVOSWALL", "style=" + style);
         if (FOLDER_SHUFFLE_WALL_KEY.equals(style)) {
             Bitmap folderBmp = CustomMedia.getNextShuffledFolderBitmap(this, CustomMedia.SCOPE_CLASSIC, 1920, 1080, true);
             if (folderBmp != null && !folderBmp.isRecycled()) {
@@ -1140,6 +1175,17 @@ public class MainActivity extends Activity {
             Bitmap custom = CustomMedia.getCustomClassicWallpaper(this);
             if (custom != null && !custom.isRecycled()) {
                 Bitmap copy = custom.copy(Bitmap.Config.ARGB_8888, true);
+                return bakeShade(copy);
+            }
+        }
+        if (TIME_OF_DAY_WALL_KEY.equals(style)) {
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            String file = timeOfDayFile(hour, System.currentTimeMillis());
+            android.util.Log.d("TVOSWALL", "timeofday hour=" + hour + " file=" + file);
+            Bitmap tod = Scenes.loadAssetBitmap(this, "backgrounds/" + file, 1280, 720);
+            if (tod != null) {
+                Bitmap copy = tod.copy(Bitmap.Config.ARGB_8888, true);
+                if (copy != tod) tod.recycle();
                 return bakeShade(copy);
             }
         }
@@ -4537,6 +4583,8 @@ public class MainActivity extends Activity {
      * and pick up Wi-Fi signal changes.
      */
     int tickCount;
+    /** Last hour the Time-of-Day wallpaper was drawn for, so the art changes on the hour. */
+    int lastWallHour = -1;
     final Runnable weatherTick = new Runnable() {
         @Override public void run() {
             Weather.refresh(MainActivity.this, false, MainActivity.this::updateWeather);
@@ -4545,6 +4593,13 @@ public class MainActivity extends Activity {
             if (++tickCount % 5 == 0 && !shelfView.hasFocus()) loadHero();
             if (!Scenes.isScenesLook(MainActivity.this) && FOLDER_SHUFFLE_WALL_KEY.equals(wallStyle)) {
                 setWallpaper(wallStyle);
+            }
+            if (!Scenes.isScenesLook(MainActivity.this) && TIME_OF_DAY_WALL_KEY.equals(wallStyle)) {
+                int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+                if (hour != lastWallHour) {
+                    lastWallHour = hour;
+                    setWallpaper(wallStyle);
+                }
             }
             if (tickCount % 15 == 0) AirPlayGuard.check(MainActivity.this, false);
             LocalAdb.checkAndRepairPermissionsIfNeeded(MainActivity.this, false);
@@ -5153,7 +5208,7 @@ public class MainActivity extends Activity {
         Profiles.setCurrent(this, id);
         prefs = Profiles.homePrefs(this);
         refreshAvatar();
-        wallStyle = prefs.getString("wallpaper", "aurora");
+        wallStyle = prefs.getString("wallpaper", TIME_OF_DAY_WALL_KEY);
         setWallpaper(wallStyle);
         folderMode = false;
         moveIndex = -1;

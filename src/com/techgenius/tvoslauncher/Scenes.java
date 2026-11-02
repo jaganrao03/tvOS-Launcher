@@ -43,6 +43,8 @@ public final class Scenes {
     public static final int MAX_CUSTOM_SCENES = 5;
     public static final String[] CUSTOM_IDS = {"custom", "custom_2", "custom_3", "custom_4", "custom_5"};
     public static final String FOLDER_SHUFFLE_ID = "folder_shuffle";
+    /** Wallhaven-sourced Apple-style set that follows the clock (see timeOfDaySpec). */
+    public static final String TIME_OF_DAY_ID = "timeofday";
     public static final String LOCK_CUSTOM_ID = "lock_custom";
     public static final String LOCK_FOLDER_SHUFFLE_ID = "lock_folder_shuffle";
 
@@ -104,6 +106,10 @@ public final class Scenes {
     }
 
     public static final Spec[] ALL = {
+        new Spec(TIME_OF_DAY_ID, "Time of Day", "G\u00fcn\u00fcn Saati",
+                "backgrounds/timeofday-day-1.jpg", null, null,
+                false, false, false,
+                68f, 190f, 48f, 45f, 52f, false),
         new Spec("night", "Night", "Gece",
                 "backgrounds/scene-night.jpg", "backgrounds/scene-night-glass.jpg", "backgrounds/scene-night-fg.webp",
                 false, false, false,
@@ -199,6 +205,28 @@ public final class Scenes {
                 || base.startsWith("grad:");
     }
 
+    /** day 08-16, golden 05-07 + 17-18, dusk 19-20, night 21-04. */
+    public static String timeOfDayMood(int hour) {
+        if (hour >= 8 && hour <= 16) return "day";
+        if ((hour >= 5 && hour <= 7) || (hour >= 17 && hour <= 18)) return "golden";
+        if (hour >= 19 && hour <= 20) return "dusk";
+        return "night";
+    }
+
+    /** Which of the three files for this mood is due: shifts every hour and every day. */
+    public static String timeOfDayFile(int hour, long nowMs) {
+        String mood = timeOfDayMood(hour);
+        int day = (int) ((nowMs / 86400000L) % 3);
+        return "timeofday-" + mood + "-" + (((day + hour) % 3) + 1) + ".jpg";
+    }
+
+    public static Spec timeOfDaySpec(long nowMs) {
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        return new Spec(TIME_OF_DAY_ID, "Time of Day", "G\u00fcn\u00fcn Saati",
+                "backgrounds/" + timeOfDayFile(hour, nowMs), null, null,
+                false, false, false, 68f, 190f, 48f, 45f, 52f, false);
+    }
+
     public static String baseSceneId(String id) {
         if (id == null) return "";
         int hash = id.indexOf('#');
@@ -222,6 +250,7 @@ public final class Scenes {
         if (FOLDER_SHUFFLE_ID.equals(id)) return FOLDER_SHUFFLE_SPEC;
         if (LOCK_CUSTOM_ID.equals(id)) return LOCK_CUSTOM_SPEC;
         if (LOCK_FOLDER_SHUFFLE_ID.equals(id)) return LOCK_FOLDER_SHUFFLE_SPEC;
+        if (TIME_OF_DAY_ID.equals(id)) return timeOfDaySpec(System.currentTimeMillis());
         if (id.startsWith("photo:")) {
             String file = id.substring("photo:".length());
             for (String[] row : CLASSIC_PHOTOS) {
@@ -341,7 +370,11 @@ public final class Scenes {
     }
 
     public static List<String> getEnabledSceneIds(Context c) {
-        String raw = prefs(c).getString("scene_enabled", "night,golden,water,fog,dawn");
+        // One-time: the clock-driven Wallhaven set replaces the stock scene rotation.
+        if (!prefs(c).getBoolean("tod_scenes_applied", false)) {
+            prefs(c).edit().putString("scene_enabled", TIME_OF_DAY_ID).putBoolean("tod_scenes_applied", true).apply();
+        }
+        String raw = prefs(c).getString("scene_enabled", TIME_OF_DAY_ID);
         List<String> enabled = new ArrayList<>();
         for (String part : raw.split(",")) {
             String p = part.trim();
@@ -716,6 +749,8 @@ public final class Scenes {
         private int weatherCode = -1;
         private boolean lockScreenMode = false;
         private int folderFlipCounter = 0;
+        /** Hour whose Time-of-Day artwork is on screen, so it swaps on the hour. */
+        private int lastTodHour = -1;
 
         private final Paint bmpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Paint shadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -751,6 +786,32 @@ public final class Scenes {
                 if (!sig.equals(lastTickSignature)) {
                     lastTickSignature = sig;
                     invalidate();
+                }
+                if (activeIds.contains(TIME_OF_DAY_ID)) {
+                    int hr = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+                    if (hr != lastTodHour) {
+                        lastTodHour = hr;
+                        String want = TIME_OF_DAY_ID + "#" + hr;
+                        if (!want.equals(currentId)) {
+                            prevId = currentId;
+                            currentId = want;
+                            ensureLoaded(currentId);
+                            notifySceneBackdrop();
+                            if (fadeAnim != null) fadeAnim.cancel();
+                            crossfade = 0f;
+                            fadeAnim = ValueAnimator.ofFloat(0f, 1f);
+                            fadeAnim.setDuration(1600L);
+                            fadeAnim.addUpdateListener(a -> {
+                                crossfade = (Float) a.getAnimatedValue();
+                                if (crossfade >= 1f) {
+                                    prevId = null;
+                                    evictUnusedScenes();
+                                }
+                                invalidate();
+                            });
+                            fadeAnim.start();
+                        }
+                    }
                 }
                 long now = System.currentTimeMillis();
                 long delay = 15000L - (now % 15000L);
@@ -837,6 +898,7 @@ public final class Scenes {
             Context c = getContext();
             List<String> enabled = lockScreenMode ? getEnabledLockSceneIds(c) : getEnabledSceneIds(c);
             activeIds = enabled;
+            lastTodHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
             String preferKey = lockScreenMode ? "prefer_lock_scene_id" : "prefer_scene_id";
             String prefer = prefs(c).getString(preferKey, null);
             if (prefer != null) {
