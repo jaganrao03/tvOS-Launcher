@@ -183,8 +183,8 @@ final class SceneHome {
 
         whoBar.setOnFocusChangeListener((v, has) -> {
             v.setForeground(has ? whoFocusRing : null);
-            v.animate().scaleX(has ? 1.05f : 1f).scaleY(has ? 1.05f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().scaleX(has ? 1.09f : 1f).scaleY(has ? 1.09f : 1f)
+                    .setDuration(115).setInterpolator(MainActivity.LIFT).start();
         });
         whoBar.setOnClickListener(v -> {
             List<Profiles.Profile> ps = Profiles.list(host);
@@ -236,8 +236,8 @@ final class SceneHome {
 
         weatherBtn.setOnFocusChangeListener((v, has) -> {
             v.setForeground(has ? weatherFocusRing : null);
-            v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f)
+                    .setDuration(115).setInterpolator(MainActivity.LIFT).start();
         });
         weatherBtn.setOnClickListener(v -> host.showWeather());
         weatherBtn.setOnLongClickListener(v -> {
@@ -284,8 +284,8 @@ final class SceneHome {
 
         moonBtn.setOnFocusChangeListener((v, has) -> {
             v.setForeground(has ? moonFocusRing : null);
-            v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f)
+                    .setDuration(115).setInterpolator(MainActivity.LIFT).start();
         });
         moonBtn.setOnClickListener(v -> host.showControlCenter());
         moonBtn.setOnLongClickListener(v -> {
@@ -594,10 +594,10 @@ final class SceneHome {
         card.setOnFocusChangeListener((v, has) -> {
             if (has) focusedShelfIdx = index;
             v.setForeground(has ? focusRing : null);
-            v.animate().withLayer().scaleX(has ? 1.035f : 1f).scaleY(has ? 1.035f : 1f)
-                    .translationY(has ? -dp(2) : 0)
-                    .translationZ(has ? dp(10) : 0)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().withLayer().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
+                    .translationY(has ? -dp(4) : 0)
+                    .translationZ(has ? dp(14) : 0)
+                    .setDuration(115).setInterpolator(MainActivity.LIFT).start();
         });
         card.setOnClickListener(v -> openWatchCard(d));
         card.setOnLongClickListener(v -> {
@@ -996,15 +996,15 @@ final class SceneHome {
                 } else {
                     updateDockTooltip(v, a.label);
                 }
-                v.animate().withLayer().scaleX(1.13f).scaleY(1.13f)
-                        .translationY(0f)
-                        .translationZ(isGear || isMore ? 0f : dp(8))
-                        .setDuration(190).setInterpolator(MainActivity.LIFT).start();
+                v.animate().withLayer().scaleX(1.20f).scaleY(1.20f)
+                        .translationY(-dp(2))
+                        .translationZ(isGear || isMore ? 0f : dp(12))
+                        .setDuration(115).setInterpolator(MainActivity.LIFT).start();
             } else {
                 v.animate().withLayer().scaleX(1f).scaleY(1f)
                         .translationY(0f)
                         .translationZ(0f)
-                        .setDuration(150).setInterpolator(MainActivity.EASE).start();
+                        .setDuration(95).setInterpolator(MainActivity.EASE).start();
                 overlay.post(() -> {
                     if (!isAnyDockTileFocused()) updateDockTooltip(null, "");
                 });
@@ -1678,8 +1678,8 @@ final class SceneHome {
             pill.setOnFocusChangeListener((v, has) -> {
                 pbg.setColor(has ? 0xF2FFFFFF : 0x18FFFFFF);
                 pill.setTextColor(has ? 0xFF111114 : 0xFFF4F4F6);
-                v.animate().scaleX(has ? 1.06f : 1f).scaleY(has ? 1.06f : 1f)
-                        .setDuration(150).setInterpolator(MainActivity.LIFT).start();
+                v.animate().scaleX(has ? 1.09f : 1f).scaleY(has ? 1.09f : 1f)
+                        .setDuration(95).setInterpolator(MainActivity.LIFT).start();
             });
             pill.setOnClickListener(v -> {
                 SleepReceiver.setTimer(host, m);
@@ -1754,7 +1754,7 @@ final class SceneHome {
         chip.setOnFocusChangeListener((v, has) -> {
             bg.setColor(has ? 0xF2FFFFFF : 0x14FFFFFF);
             chip.setTextColor(has ? 0xFF111114 : 0xD9F4F4F6);
-            v.animate().scaleX(has ? 1.04f : 1f).scaleY(has ? 1.04f : 1f).setDuration(150).start();
+            v.animate().scaleX(has ? 1.07f : 1f).scaleY(has ? 1.07f : 1f).setDuration(95).start();
         });
         chip.setOnClickListener(v -> onClick.run());
         return chip;

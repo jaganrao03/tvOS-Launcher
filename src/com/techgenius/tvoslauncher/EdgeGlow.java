@@ -21,7 +21,7 @@ public final class EdgeGlow extends View {
     static final float REACH = 0.20f;
     /** The glow's opacity at the edge at edge_glow 100. */
     static final float MAX_ALPHA = 0.34f;
-    private static final int FADE_MS = 180;
+    private static final int FADE_MS = 90;
 
     private final Paint left = new Paint();
     private final Paint right = new Paint();
@@ -61,7 +61,7 @@ public final class EdgeGlow extends View {
         invalidate();
     }
 
-    /** Re-tints to this app's accent, fading over about 180ms unless {@code animate} is false. */
+    /** Re-tints to this app's accent, fading over about 90ms unless {@code animate} is false. */
     void tint(int accent, boolean animate) {
         if (edgeAlpha <= 0) return;
         // 0 means nothing to tint by: the edges fade out instead of turning opaque black.

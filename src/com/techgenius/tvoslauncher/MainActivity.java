@@ -126,10 +126,10 @@ public class MainActivity extends Activity {
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
-    static final float FOCUS_SCALE = 1.2f;
+    static final float FOCUS_SCALE = 1.24f;
     /** Focus lift with a slight spring, like tvOS. */
     static final android.view.animation.OvershootInterpolator LIFT =
-            new android.view.animation.OvershootInterpolator(1.3f);
+            new android.view.animation.OvershootInterpolator(1.75f);
 
     static class AppEntry {
         String key, pkg, label, defaultLabel;
@@ -755,7 +755,7 @@ public class MainActivity extends Activity {
         refreshButton.setOnFocusChangeListener((v, has) -> {
             refreshButton.setBackground(has ? rfLit : rfGlass);
             refreshButton.setImageBitmap(Glyphs.get("refresh", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            v.animate().scaleX(has ? 1.16f : 1f).scaleY(has ? 1.16f : 1f).setDuration(125).setInterpolator(LIFT).start();
         });
         refreshButton.setOnClickListener(v -> refreshAll());
 
@@ -777,7 +777,7 @@ public class MainActivity extends Activity {
         searchButton.setOnFocusChangeListener((v, has) -> {
             searchButton.setBackground(has ? seLit : seGlass);
             searchButton.setImageBitmap(Glyphs.get("search", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            v.animate().scaleX(has ? 1.16f : 1f).scaleY(has ? 1.16f : 1f).setDuration(125).setInterpolator(LIFT).start();
         });
         searchButton.setOnClickListener(v -> showSearch(null));
 
@@ -798,7 +798,7 @@ public class MainActivity extends Activity {
         ccButton.setOnFocusChangeListener((v, has) -> {
             ccButton.setBackground(has ? ccLit : ccGlass);
             ccButton.setImageBitmap(Glyphs.get("controls", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            v.animate().scaleX(has ? 1.16f : 1f).scaleY(has ? 1.16f : 1f).setDuration(125).setInterpolator(LIFT).start();
         });
         ccButton.setOnClickListener(v -> showControlCenter());
 
@@ -826,8 +826,8 @@ public class MainActivity extends Activity {
         avRing.setStroke(dp(2), Color.WHITE);
         avatar.setOnFocusChangeListener((v, has) -> {
             avatar.setForeground(has ? avRing : null);
-            v.animate().withLayer().scaleX(has ? 1.14f : 1f).scaleY(has ? 1.14f : 1f)
-                    .setDuration(180).setInterpolator(LIFT).start();
+            v.animate().withLayer().scaleX(has ? 1.16f : 1f).scaleY(has ? 1.16f : 1f)
+                    .setDuration(120).setInterpolator(LIFT).start();
         });
         avatar.setOnClickListener(v -> showProfilePicker(false));
 
@@ -853,8 +853,8 @@ public class MainActivity extends Activity {
         weatherCard.setOnFocusChangeListener((v, has) -> {
             weatherGlass.setLit(has);
             if (has) v.setAlpha(1f);
-            v.animate().scaleX(has ? 1.05f : 1f).scaleY(has ? 1.05f : 1f).translationZ(has ? dp(10) : 0)
-                    .setDuration(200).setInterpolator(LIFT).start();
+            v.animate().scaleX(has ? 1.07f : 1f).scaleY(has ? 1.07f : 1f).translationZ(has ? dp(12) : 0)
+                    .setDuration(120).setInterpolator(LIFT).start();
         });
         weatherCard.setPivotX(0);
         weatherCard.setPivotY(0);
@@ -1049,17 +1049,17 @@ public class MainActivity extends Activity {
                     label.setAlpha(1f);
                     label.setTranslationY(cardH * (FOCUS_SCALE - 1f) / 2f);
                 } else {
-                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE).translationZ(dp(18)).setDuration(180)
+                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE).translationZ(dp(18)).setDuration(120)
                             .setInterpolator(LIFT).start();
-                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f).setDuration(160).start();
+                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f).setDuration(110).start();
                 }
                 topSheen.setAlpha(1f);
                 onTileFocused(index);
             } else {
                 cell.setTranslationZ(0);
                 stopSway(v);
-                v.animate().scaleX(1f).scaleY(1f).translationZ(0).setDuration(140).setInterpolator(EASE).start();
-                label.animate().alpha(0f).translationY(0).setDuration(120).start();
+                v.animate().scaleX(1f).scaleY(1f).translationZ(0).setDuration(95).setInterpolator(EASE).start();
+                label.animate().alpha(0f).translationY(0).setDuration(85).start();
                 topSheen.setAlpha(0f);
             }
         });
@@ -1997,7 +1997,7 @@ public class MainActivity extends Activity {
         root.addView(switcher, lp);
         switcher.setOnFocusChangeListener((v, has) -> {
             styleTabs();
-            v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            v.animate().scaleX(has ? 1.11f : 1f).scaleY(has ? 1.11f : 1f).setDuration(120).setInterpolator(LIFT).start();
             if (has) setHeroShown(!heroItems.isEmpty());
         });
         styleTabs();
@@ -2425,7 +2425,7 @@ public class MainActivity extends Activity {
         if (!has) heroRequested = false;
         if (has) {
             setHeroShown(true);
-            heroButton.animate().scaleX(1.08f).scaleY(1.08f).setDuration(220).setInterpolator(LIFT).start();
+            heroButton.animate().scaleX(1.12f).scaleY(1.12f).setDuration(140).setInterpolator(LIFT).start();
             heroButton.setElevation(dp(10));
             heroBtnBg.setColor(0xFFFFFFFF);
             heroBtnText.setTextColor(0xFF111114);
