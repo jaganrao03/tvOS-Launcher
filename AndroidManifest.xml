@@ -85,6 +85,14 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".HermesActivity" android:exported="true"
+            android:permission="android.permission.DUMP" android:launchMode="singleTask"
+            android:taskAffinity="com.techgenius.tvoslauncher.hermes"
+            android:excludeFromRecents="true" android:screenOrientation="landscape"
+            android:theme="@style/HermesTheme" />
+        <receiver android:name=".HomeBackup$UpgradeReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
         <receiver android:name=".SleepReceiver" android:exported="false" />
         <receiver android:name=".AppUpdater$InstallStatusReceiver" android:exported="false" />
         <service

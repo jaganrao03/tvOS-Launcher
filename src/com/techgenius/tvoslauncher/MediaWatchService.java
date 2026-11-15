@@ -128,9 +128,15 @@ public class MediaWatchService extends NotificationListenerService {
         }
 
         static synchronized void write(Context c, JSONArray a) {
-            try (OutputStream os = new FileOutputStream(file(c))) {
+            android.util.AtomicFile af = new android.util.AtomicFile(file(c));
+            FileOutputStream os = null;
+            try {
+                os = af.startWrite();
                 os.write(a.toString().getBytes(StandardCharsets.UTF_8));
-            } catch (Exception ignored) {
+                af.finishWrite(os);
+            } catch (Exception e) {
+                if (os != null) af.failWrite(os);
+                throw new IllegalStateException("Cannot save Continue Watching", e);
             }
         }
 
@@ -166,27 +172,23 @@ public class MediaWatchService extends NotificationListenerService {
                 if (key.equals(o.optString("key"))) prev = o;
                 else out.put(o);
             }
-            // Finished (last 3%): drop it from the list.
-            if (dur > 0 && pos > dur * 0.97) {
-                write(c, out);
-                return;
-            }
+            // Retain history and metadata, including dismissed and completed entries.
+            // Compare real session samples, never extrapolated wall-clock playback positions.
+            long raw = s != null ? s.getPosition() : -1;
+            long sample = s != null ? s.getLastPositionUpdateTime() : 0;
+            boolean playing = s != null && s.getState() == PlaybackState.STATE_PLAYING;
+            boolean fresh = sample > 0 && (prev == null || sample != prev.optLong("sample_time", 0));
+            boolean newWatch = prev != null && fresh && prev.optLong("raw_pos", -1) > 60000 && raw >= 0 && raw < 5000;
+            boolean dismissed = prev != null && prev.optBoolean("dismissed", false);
+            if (dismissed && fresh && !ContinuePolicy.suppressed(prev.optLong("dismiss_raw", -1), raw, playing, newWatch)) dismissed = false;
+            boolean advanced = prev == null || (fresh && playing && (newWatch || raw > prev.optLong("raw_pos", -1)));
             try {
                 String art = prev != null ? prev.optString("art") : "";
                 Bitmap bmp = m.getBitmap(MediaMetadata.METADATA_KEY_ART);
                 if (bmp == null) bmp = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
                 if (bmp == null) bmp = m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
                 if (bmp != null && bmp.getWidth() >= 160) {
-                    File dir = new File(c.getFilesDir(), "cw");
-                    dir.mkdirs();
-                    File f = new File(dir, Integer.toHexString(key.hashCode()) + ".jpg");
-                    float sc = Math.min(1f, 960f / bmp.getWidth());
-                    Bitmap small = sc < 1f ? Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc),
-                            Math.round(bmp.getHeight() * sc), true) : bmp;
-                    try (OutputStream os = new FileOutputStream(f)) {
-                        small.compress(Bitmap.CompressFormat.JPEG, 88, os);
-                    }
-                    art = f.getAbsolutePath();
+                    art = ArtworkStore.save(new File(c.getFilesDir(), "cw"), bmp);
                 } else if (art.isEmpty()) {
                     String uri = text(m, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_ALBUM_ART_URI,
                             MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI);
@@ -208,11 +210,18 @@ public class MediaWatchService extends NotificationListenerService {
                         link = "https://www.youtube.com/watch?v=" + ytId;
                     }
                 }
-                JSONObject e = new JSONObject().put("key", key).put("pkg", pkg).put("title", title).put("sub", sub)
-                        .put("art", art).put("pos", pos).put("dur", dur).put("ts", System.currentTimeMillis())
-                        .put("link", link);
+                JSONObject e = prev != null ? new JSONObject(prev.toString()) : new JSONObject();
+                e.put("key", key).put("pkg", pkg).put("title", title).put("art", art).put("link", link)
+                        .put("dismissed", dismissed);
+                if (!sub.isEmpty() || prev == null) e.put("sub", sub);
+                if (dur > 0 || prev == null) e.put("dur", dur);
+                // Identical raw samples must not persist new extrapolated positions. Metadata still merges.
+                if (fresh && pos >= 0 || prev == null) e.put("pos", pos);
+                if (fresh && raw >= 0) e.put("raw_pos", raw).put("sample_time", sample);
+                if (advanced || prev == null) e.put("ts", System.currentTimeMillis());
+                if (prev != null && e.toString().equals(prev.toString())) return;
                 JSONArray res = new JSONArray().put(e);
-                for (int i = 0; i < out.length() && res.length() < MAX; i++) res.put(out.get(i));
+                for (int i = 0; i < out.length(); i++) res.put(out.get(i));
                 write(c, res);
 
                 if (isYouTubePkg(pkg) && link.isEmpty()) {
@@ -248,33 +257,59 @@ public class MediaWatchService extends NotificationListenerService {
             }
         }
 
-        /** Drops entries last played more than 7 days ago (and their saved artwork). */
+        /** Retention is a view filter only; history and artwork are never pruned here. */
         static synchronized JSONArray pruneExpired(Context c) {
             JSONArray a = read(c), keep = new JSONArray();
             long now = System.currentTimeMillis();
-            boolean changed = false;
+            int days = Profiles.homePrefs(c).getInt("cw_retention_days", 7);
+            java.util.Set<String> hidden = Profiles.homePrefs(c).getStringSet("cw_hidden_sources", java.util.Collections.emptySet());
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.optJSONObject(i);
-                if (o == null) continue;
-                if (now - o.optLong("ts", now) > EXPIRE_MS) {
-                    changed = true;
-                    String art = o.optString("art");
-                    if (art.startsWith("/")) new File(art).delete();
-                } else {
-                    keep.put(o);
-                }
+                if (o == null || o.optBoolean("dismissed", false) || hidden.contains(o.optString("pkg"))) continue;
+                if (!ContinuePolicy.visible(o.optLong("ts", now), now, days)) continue;
+                if (o.optLong("dur", 0) > 0 && o.optLong("pos", -1) > o.optLong("dur") * .97) continue;
+                keep.put(o);
             }
-            if (changed) write(c, keep);
             return keep;
         }
 
         static synchronized void remove(Context c, String key) {
-            JSONArray old = read(c), out = new JSONArray();
-            for (int i = 0; i < old.length(); i++) {
-                JSONObject o = old.optJSONObject(i);
-                if (o != null && !key.equals(o.optString("key"))) out.put(o);
+            JSONArray a = read(c);
+            try {
+                for (int i = 0; i < a.length(); i++) {
+                    JSONObject o = a.optJSONObject(i);
+                    if (o != null && key.equals(o.optString("key")))
+                        o.put("dismissed", true).put("dismiss_raw", o.optLong("raw_pos", o.optLong("pos", -1)));
+                }
+                write(c, a);
+            } catch (Exception e) { throw new IllegalStateException("Cannot dismiss title", e); }
+        }
+
+        static void hideSource(Context c, String pkg) {
+            java.util.Set<String> hidden = new java.util.HashSet<>(Profiles.homePrefs(c).getStringSet("cw_hidden_sources", java.util.Collections.emptySet()));
+            hidden.add(pkg);
+            if (!Profiles.homePrefs(c).edit().putStringSet("cw_hidden_sources", hidden).commit()) throw new IllegalStateException("Cannot hide source");
+        }
+
+        static synchronized void restoreDismissed(Context c) {
+            JSONArray a = read(c);
+            try { for (int i = 0; i < a.length(); i++) a.getJSONObject(i).put("dismissed", false); write(c, a); }
+            catch (Exception e) { throw new IllegalStateException("Cannot restore dismissed titles", e); }
+        }
+
+        static String details(Context c, String key) {
+            JSONArray a = read(c);
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.optJSONObject(i);
+                if (o != null && key.equals(o.optString("key"))) {
+                    String pkg = o.optString("pkg"); String name = pkg;
+                    try { name = c.getPackageManager().getApplicationLabel(c.getPackageManager().getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) { }
+                    long ts = o.optLong("ts", 0);
+                    return "Source: " + name + " (" + pkg + ")\nLast played: " + (ts > 0 ? java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(ts)) : "Unknown")
+                            + "\nOnly metadata published by this app is available. Launcher profiles do not map to Nuvio profiles.";
+                }
             }
-            write(c, out);
+            return "Source metadata unavailable";
         }
 
         static synchronized void clear(Context c) {

@@ -281,10 +281,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        HomeBackup.initial(this);
         activeInstance = this;
         // The wallpaper/artwork always covers the screen: skip the window's own full-screen fill
         // (this Mali-450 GPU is fill-rate bound, so every hidden full-screen layer costs frames).
         getWindow().setBackgroundDrawable(null);
+        boundProfileId = Profiles.current(this).id;
         prefs = Profiles.homePrefs(this);
         String initLang = getIntent() != null ? getIntent().getStringExtra("lang") : null;
         if (initLang != null && !initLang.isEmpty()) {
@@ -455,10 +457,13 @@ public class MainActivity extends Activity {
         if (size.x != screenW || size.y != screenH || Ui.unit(this) != unit) recreate();
     }
 
+    private String boundProfileId;
+
     @Override
     protected void onResume() {
         super.onResume();
-        if (!I18n.getLang(this).equals(activeLang) || !Scenes.getLook(this).equals(activeLook)) {
+        if (!Profiles.current(this).id.equals(boundProfileId)
+                || !I18n.getLang(this).equals(activeLang) || !Scenes.getLook(this).equals(activeLook)) {
             recreate();
             return;
         }
@@ -2534,6 +2539,11 @@ public class MainActivity extends Activity {
                             heroItems = new ArrayList<>();
                             loadHero();
                         });
+                        l.add("Details — source and last played");
+                        act.add(() -> new android.app.AlertDialog.Builder(this).setTitle(it.title)
+                                .setMessage(MediaWatchService.Store.details(this, it.key)).setPositiveButton("Back", null).show());
+                        l.add("Hide source for this launcher profile");
+                        act.add(() -> { MediaWatchService.Store.hideSource(this, it.pkg); loadHero(); });
                         showMenu(heroButton, it.title, l, act, 1);
                     }
                     return true;

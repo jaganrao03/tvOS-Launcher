@@ -430,7 +430,7 @@ final class SceneHome {
             } else {
                 c.subtitle = I18n.s(host, "Resume playback", "Oynatmaya devam et");
             }
-            c.progress = it.progress > 0 ? it.progress : 0.45f;
+            c.progress = it.progress;
             c.backdropUrl = it.backdrop;
             c.sourceItem = it;
             c.removable = true;
@@ -584,12 +584,13 @@ final class SceneHome {
         flBg.setColor(0xEBFFFFFF);
         barFill.setBackground(flBg);
         int maxBarW = cardW - tw - dp(30);
-        int fillW = Math.max(dp(6), Math.round(maxBarW * Math.max(0.05f, Math.min(1f, d.progress))));
+        int fillW = Math.max(0, Math.round(maxBarW * Math.max(0f, Math.min(1f, d.progress))));
         barTrack.addView(barFill, new FrameLayout.LayoutParams(fillW, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout.LayoutParams prlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(2.5f));
         prlp.topMargin = dp(4.5f);
         body.addView(barTrack, prlp);
+        if (d.progress < 0) barTrack.setVisibility(View.GONE);
 
         card.setOnFocusChangeListener((v, has) -> {
             if (has) focusedShelfIdx = index;
@@ -643,6 +644,11 @@ final class SceneHome {
         List<Runnable> actions = new ArrayList<>();
         labels.add(I18n.s(host, "Resume", "Devam Et"));
         actions.add(() -> openWatchCard(d));
+        labels.add("Details — source and last played");
+        actions.add(() -> new android.app.AlertDialog.Builder(host).setTitle(d.title)
+                .setMessage(MediaWatchService.Store.details(host, d.key)).setPositiveButton("Back", null).show());
+        labels.add("Hide this source for this launcher profile");
+        actions.add(() -> { MediaWatchService.Store.hideSource(host, d.pkg); refreshKeepWatching(); });
         int destructive = -1;
         if (d.removable && d.key != null) {
             destructive = labels.size();

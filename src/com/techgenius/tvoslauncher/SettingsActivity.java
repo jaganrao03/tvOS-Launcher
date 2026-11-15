@@ -966,6 +966,25 @@ public class SettingsActivity extends Activity {
                 default: return tr("Recommendations & News", "Öneriler ve Haberler");
             }
         }, () -> openSubMenu("top_shelf"));
+        row("Continue Watching retention", () -> {
+            int days = Profiles.homePrefs(this).getInt("cw_retention_days", 7);
+            return days == 0 ? "Never expire" : days + " days";
+        }, () -> {
+            int days = Profiles.homePrefs(this).getInt("cw_retention_days", 7);
+            Profiles.homePrefs(this).edit().putInt("cw_retention_days", days == 7 ? 30 : days == 30 ? 0 : 7).apply();
+            refreshAll();
+        });
+        row("Restore hidden Continue Watching sources", () -> "This launcher profile ›", () -> {
+            Profiles.homePrefs(this).edit().putStringSet("cw_hidden_sources", new HashSet<>()).apply();
+            showStatusMsg("All sources visible again for this launcher profile");
+        });
+        row("Restore dismissed Continue Watching titles", () -> "This launcher profile ›", () -> {
+            MediaWatchService.Store.restoreDismissed(this);
+            showStatusMsg("Dismissed titles restored (retention and completed-title filters still apply)");
+        });
+        infoNote(MediaWatchService.granted(this)
+                ? "Only apps publishing media metadata appear after playback. Empty lists can also mean hidden sources, dismissals, completed titles or the retention filter. History/artwork are retained. Launcher profiles do not map to Nuvio profiles. Hold OK on a title for source details or to hide its source."
+                : "Continue Watching needs notification-listener access in Quick settings. Apps must publish media metadata; access alone cannot create entries. Launcher profiles do not map to Nuvio profiles.");
         row(tr("Clear Continue Watching history", "İzlemeye Devam Et geçmişini temizle"),
                 () -> "",
                 () -> {
@@ -1385,6 +1404,15 @@ public class SettingsActivity extends Activity {
     }
 
     void pageQuickAndHome() {
+        section("HERMES & HOME BACKUPS");
+        row("Hey Hermes", () -> HermesActivity.enabled(this) ? "TV integration on ›" : "Setup ›",
+                () -> startActivity(new Intent(this, HermesActivity.class).putExtra("state", "setup").putExtra("request", "settings-setup")));
+        row("Export readable home backup", () -> "JSON ›", () -> {
+            try { showStatusMsg("Backup saved: " + HomeBackup.export(this, "manual").getAbsolutePath()); }
+            catch (Exception e) { HomeBackup.failure(this, e); }
+        });
+        row("Import home backup", () -> "Choose JSON ›", () -> HomeBackup.choose(this));
+        infoNote("Backups contain profile/home preferences and Continue Watching metadata, not wallpaper/icon/artwork bytes, media URLs, credentials, Hermes or network settings. Existing backups are kept.");
         section(tr("HOME & PERMISSIONS", "ANA EKRAN VE İZİNLER"));
         row(tr("Default home screen", "Varsayılan ana ekran"),
                 () -> Perms.isDefaultHome(this) ? tr("Active", "Etkin") : tr("Set as default…", "Varsayılan yap…"),
@@ -4833,6 +4861,10 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == HomeBackup.IMPORT) {
+            if (resultCode == RESULT_OK) HomeBackup.selected(this, data);
+            return;
+        }
         CustomMedia.onActivityResult(requestCode, resultCode, data);
     }
 
