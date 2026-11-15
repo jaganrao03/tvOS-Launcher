@@ -928,10 +928,11 @@ final class SceneHome {
 
         boolean isGear = GEAR_KEY.equals(a.key);
         boolean isMore = MORE_KEY.equals(a.key);
+        boolean isInputs = MainActivity.INPUTS_KEY.equals(a.key);
 
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(rad);
-        if (isGear || isMore) {
+        if (isGear || isMore || isInputs) {
             bg.setColor(0x1EFFFFFF);
             bg.setStroke(Math.max(1, dp(0.8f)), 0x24FFFFFF);
         } else {
@@ -954,6 +955,11 @@ final class SceneHome {
         } else if (isMore) {
             iv.setScaleType(ImageView.ScaleType.CENTER);
             iv.setImageBitmap(Glyphs.get("more", glyphSize, 0xEBF4F4F6));
+            tile.addView(iv, host.match());
+        } else if (isInputs) {
+            iv.setScaleType(ImageView.ScaleType.CENTER);
+            int inputGlyphSize = Math.max(dp(12), Math.round(dp(22) * scale));
+            iv.setImageBitmap(Glyphs.get("input_dock", inputGlyphSize, 0xEBF4F4F6));
             tile.addView(iv, host.match());
         } else {
             boolean hasCustom = CustomMedia.hasCustomAppIcon(host, a.key, a.pkg);
@@ -987,7 +993,7 @@ final class SceneHome {
             v.setForeground(has ? focusRing : null);
             if (has) {
                 focusedDockIdx = index;
-                host.tintEdge((isGear || isMore) ? 0 : a.color, true);
+                host.tintEdge((isGear || isMore || isInputs) ? 0 : a.color, true);
                 host.prefs.edit().putInt("last_dock_idx", index).apply();
                 if (moveDockIdx >= 0) {
                     updateDockTooltip(v, I18n.s(host,
@@ -998,7 +1004,7 @@ final class SceneHome {
                 }
                 v.animate().withLayer().scaleX(1.20f).scaleY(1.20f)
                         .translationY(-dp(2))
-                        .translationZ(isGear || isMore ? 0f : dp(12))
+                        .translationZ(isGear || isMore || isInputs ? 0f : dp(12))
                         .setDuration(115).setInterpolator(MainActivity.LIFT).start();
             } else {
                 v.animate().withLayer().scaleX(1f).scaleY(1f)
@@ -1147,7 +1153,8 @@ final class SceneHome {
 
         labels.add(I18n.s(host, "Reset Layout", "Düzeni Sıfırla"));
         actions.add(() -> {
-            host.prefs.edit().remove(MainActivity.PREF_ORDER).remove(MainActivity.PREF_OTHER).apply();
+            host.prefs.edit().remove(MainActivity.PREF_ORDER).remove(MainActivity.PREF_OTHER)
+                    .remove("placement_defaults_v2").apply();
             host.loadApps();
             rebuildDock();
             focusDock(0);

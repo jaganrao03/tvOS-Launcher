@@ -940,6 +940,7 @@ public class SettingsActivity extends Activity {
                     Profiles.homePrefs(this).edit()
                             .remove(MainActivity.PREF_ORDER)
                             .remove(MainActivity.PREF_OTHER)
+                            .remove("placement_defaults_v2")
                             .remove(MainActivity.PREF_HIDDEN)
                             .apply();
                     showStatusMsg(tr("App layout reset to default.", "Uygulama düzeni varsayılana sıfırlandı."));

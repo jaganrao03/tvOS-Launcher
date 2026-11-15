@@ -3367,16 +3367,19 @@ public class MainActivity extends Activity {
 
         Set<String> hidden = prefs.getStringSet(PREF_HIDDEN, Collections.emptySet());
         Set<String> other = prefs.getStringSet(PREF_OTHER, Collections.emptySet());
-        // First run (nothing hidden yet): keep the TV's OEM/system tiles off the grid, as the
-        // previous launcher did. Any later change by the user replaces this list entirely.
-        if (hidden.isEmpty()) hidden = new HashSet<>(DEFAULT_HIDDEN);
-        if (other.isEmpty()) other = new HashSet<>(DEFAULT_OTHER);
+        // Seed placement defaults once; a saved empty set is an explicit user choice.
+        if (!prefs.getBoolean("placement_defaults_v2", false)) {
+            hidden = new HashSet<>(prefs.contains(PREF_HIDDEN) ? hidden : DEFAULT_HIDDEN);
+            other = new HashSet<>(prefs.contains(PREF_OTHER) ? other : DEFAULT_OTHER);
+            other.addAll(ALWAYS_OTHER); // Utilities are defaults, not an unbreakable restriction.
+            prefs.edit().putStringSet(PREF_HIDDEN, hidden).putStringSet(PREF_OTHER, other)
+                    .putBoolean("placement_defaults_v2", true).apply();
+        }
         Map<String, AppEntry> pool = new LinkedHashMap<>();
         for (AppEntry e : all.values()) {
             if (hidden.contains(e.key) || (e.pkg != null && hidden.contains(e.pkg))) {
                 hiddenApps.add(e);
-            } else if (other.contains(e.key) || (e.pkg != null && other.contains(e.pkg))
-                    || (e.pkg != null && ALWAYS_OTHER.contains(e.pkg))) {
+            } else if (other.contains(e.key) || (e.pkg != null && other.contains(e.pkg))) {
                 otherApps.add(e);
             } else {
                 pool.put(e.key, e);

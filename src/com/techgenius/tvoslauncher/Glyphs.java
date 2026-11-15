@@ -110,6 +110,9 @@ final class Glyphs {
                 hole.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
                 c.drawCircle(m, m, s * 0.13f, hole);
                 break;
+            case "input_dock":
+                p.setStrokeWidth(s * 0.06f);
+                // Deliberately share geometry, but optically match the dock's gear and more glyphs.
             case "input":  // a screen with an arrow coming in from the left (Inputs)
                 r.set(s * 0.3f, s * 0.2f, s * 0.88f, s * 0.8f);
                 path.moveTo(s * 0.3f, s * 0.36f);
