@@ -22,7 +22,11 @@ def check(before_path, after_path):
     interior = [(x, y) for x, y in mask if all(
         (x + dx, y + dy) in mask for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)])]
     assert len(interior) > 300, 'Baseline hour glyph mask missing; capture home first'
-    pixels = [after.getpixel(point) for point in interior]
+    pixels: list[tuple[int, ...]] = []
+    for point in interior:
+        pixel = after.getpixel(point)
+        assert isinstance(pixel, tuple), 'Expected RGB tuple after conversion'
+        pixels.append(pixel)
     opaque = sum(white(pixel) for pixel in pixels) / len(pixels)
     colour = statistics.mean(max(pixel) - min(pixel) for pixel in pixels)
     print(f'Clock interiors: {len(pixels)} pixels; opaque white={opaque:.3f}; RGB spread={colour:.2f}')
