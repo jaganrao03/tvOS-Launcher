@@ -1577,10 +1577,47 @@ public final class Scenes {
             edClockPaint.setTypeface(Ui.font(ctx, "display"));
             edClockPaint.setTextSize(m.clockTextPx);
             edClockPaint.setLetterSpacing(-0.02f);
-            edClockPaint.setColor(Color.argb(250, 250, 250, 252));
-            edClockPaint.setShadowLayer(14f * m.u, 0f, 2f * m.u, Color.argb(130, 0, 0, 0));
-            canvas.drawText(HomeComposition.clockText(now.get(java.util.Calendar.HOUR_OF_DAY),
-                    now.get(java.util.Calendar.MINUTE), isClock24h(ctx)), m.left, m.clockBaseline, edClockPaint);
+            String clockText = HomeComposition.clockText(now.get(java.util.Calendar.HOUR_OF_DAY),
+                    now.get(java.util.Calendar.MINUTE), isClock24h(ctx));
+            // The existing scene texture is blurred, wallpaper-coloured glass. Sample it in
+            // screen coordinates so sky/ridge colours continue through the digits, not a
+            // rectangular panel. This runs only when the cached minute frame is rebuilt.
+            edClockPaint.setStyle(Paint.Style.FILL);
+            edClockPaint.setColor(Color.WHITE);
+            edClockPaint.setAlpha(220);
+            if (ls.glassShader != null && ls.glassBaked != null) {
+                shaderMatrix.reset();
+                shaderMatrix.setScale((float) w / ls.glassBaked.getWidth(),
+                        (float) h / ls.glassBaked.getHeight());
+                ls.glassShader.setLocalMatrix(shaderMatrix);
+                edClockPaint.setShader(ls.glassShader);
+            } else {
+                // Wallpaper loading fallback is translucent, never an opaque white clock.
+                edClockPaint.setShader(null);
+                edClockPaint.setColor(Color.argb(135, 230, 240, 255));
+            }
+            edClockPaint.setShadowLayer(7f * m.u, 0f, 2f * m.u, Color.argb(130, 0, 0, 0));
+            canvas.drawText(clockText, m.left, m.clockBaseline, edClockPaint);
+            edClockPaint.clearShadowLayer();
+            edClockPaint.setAlpha(255);
+            float glassTop = m.clockBaseline + edClockPaint.ascent();
+            // A restrained frost/specular wash: the centre stays clear and tinted.
+            edClockPaint.setShader(new LinearGradient(m.left, glassTop,
+                    m.left + m.clockTextPx * 1.6f, m.clockBaseline,
+                    new int[]{Color.argb(135, 245, 250, 255), Color.argb(32, 230, 242, 255),
+                            Color.argb(80, 245, 250, 255)},
+                    new float[]{0f, 0.52f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawText(clockText, m.left, m.clockBaseline, edClockPaint);
+            // Thin lit bevel makes the glass readable over both sky and dark foliage.
+            edClockPaint.setStyle(Paint.Style.STROKE);
+            edClockPaint.setStrokeWidth(Math.max(1f, 0.65f * m.u));
+            edClockPaint.setShader(new LinearGradient(0, glassTop, 0, m.clockBaseline,
+                    new int[]{Color.argb(220, 250, 253, 255), Color.argb(70, 225, 239, 255),
+                            Color.argb(155, 245, 250, 255)},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawText(clockText, m.left, m.clockBaseline, edClockPaint);
+            edClockPaint.setStyle(Paint.Style.FILL);
+            edClockPaint.setShader(null);
 
             String desc = weatherDesc != null && !weatherDesc.isEmpty() ? I18n.t(ctx, weatherDesc) : null;
             edInfoPaint.setTypeface(Ui.font(ctx, "medium"));
