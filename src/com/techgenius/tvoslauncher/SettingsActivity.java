@@ -870,7 +870,9 @@ public class SettingsActivity extends Activity {
         folderShuffleSceneRow();
 
         if (Scenes.isAnyCustomSceneEnabled(this)) {
-            row(tr("Clock position", "Saat konumu"),
+            row(Scenes.isHomeEditorial(this)
+                    ? tr("Clock position (Classic home only)", "Saat konumu (yalnızca Klasik ana ekran)")
+                    : tr("Clock position", "Saat konumu"),
                     () -> Scenes.customClockPosLabel(this),
                     () -> {
                         Scenes.cycleCustomClockPos(this);
@@ -892,7 +894,16 @@ public class SettingsActivity extends Activity {
                     refreshAll();
                 });
 
-        row(tr("Clock font", "Saat yazı tipi"),
+        row(tr("Home style", "Ana ekran stili"),
+                () -> Scenes.isHomeEditorial(this) ? tr("Editorial", "Editoryal") : tr("Classic", "Klasik"),
+                () -> {
+                    Scenes.setHomeEditorial(this, !Scenes.isHomeEditorial(this));
+                    rebuildMainRows(); // re-label the Clock font / position scope notes
+                });
+
+        row(Scenes.isHomeEditorial(this)
+                ? tr("Clock font (Classic home / lock screen)", "Saat yazı tipi (Klasik ana ekran / kilit ekranı)")
+                : tr("Clock font", "Saat yazı tipi"),
                 () -> Scenes.clockStyleLabel(this),
                 () -> {
                     Scenes.cycleClockStyle(this);

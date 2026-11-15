@@ -92,18 +92,19 @@ public static void main(String[] args)throws Exception {
         actual=method(text,'protected void onResume()')
         # Execute the actual lifecycle entry through the recreation guard; UI tail is irrelevant.
         prefix=actual[:actual.index('        resumed = true;')]+'    }'
-        java='''class ResumeHarness extends Base {
-String boundProfileId="p1",activeLang="en",activeLook="same"; int recreates;
+        java='''package com.techgenius.tvoslauncher;
+class ResumeHarness extends Base {
+String boundProfileId="p1",activeLang="en",activeLook="same"; boolean activeHomeEditorial=true; int recreates;
 void recreate(){recreates++;} static class Profiles {static String id="p1"; static Profiles current(Object c){return new Profiles();}}
-static class I18n {static String getLang(Object c){return "en";}} static class Scenes {static String getLook(Object c){return "same";}}
+static class I18n {static String getLang(Object c){return "en";}} static class Scenes {static boolean editorial=true; static String getLook(Object c){return "same";} static boolean isHomeEditorial(Object c){return editorial;}}
 ACTUAL
-public static void main(String[] a){ResumeHarness h=new ResumeHarness();h.onResume();if(h.recreates!=0)throw new AssertionError();Profiles.id="p2";h.onResume();if(h.recreates!=1)throw new AssertionError("profile restore failed to recreate");System.out.println("PASS actual onResume profile guard");}}
+public static void main(String[] a){ResumeHarness h=new ResumeHarness();h.onResume();if(h.recreates!=0)throw new AssertionError();Profiles.id="p2";h.onResume();if(h.recreates!=1)throw new AssertionError("profile restore failed to recreate");Profiles.id="p1";Scenes.editorial=false;h.onResume();if(h.recreates!=2)throw new AssertionError("home style change failed to recreate");System.out.println("PASS actual onResume profile + home style guard");}}
 class Base {protected void onResume(){}}
 '''.replace('ACTUAL',prefix)
         with tempfile.TemporaryDirectory(prefix='resume-') as tmp:
             p=pathlib.Path(tmp)/'ResumeHarness.java';p.write_text(java)
-            subprocess.run(['javac',str(p)],check=True)
-            subprocess.run(['java','-cp',tmp,'ResumeHarness'],check=True)
+            subprocess.run(['javac','-d',tmp,str(p),str(SRC/'HomeComposition.java')],check=True)
+            subprocess.run(['java','-cp',tmp,'com.techgenius.tvoslauncher.ResumeHarness'],check=True)
 
     def test_provisioning_and_record_guards(self):
         activity=(SRC/'HermesActivity.java').read_text()

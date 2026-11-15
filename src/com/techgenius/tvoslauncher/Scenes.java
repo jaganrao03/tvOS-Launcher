@@ -669,6 +669,16 @@ public final class Scenes {
         prefs(c).edit().putBoolean("clock_24h", is24h).apply();
     }
 
+    /** Editorial Home composition; on unless the user explicitly opted out (reversible). */
+    public static boolean isHomeEditorial(Context c) {
+        return HomeComposition.editorialEnabled(prefs(c).contains(HomeComposition.PREF_KEY)
+                ? Boolean.valueOf(prefs(c).getBoolean(HomeComposition.PREF_KEY, true)) : null);
+    }
+
+    public static void setHomeEditorial(Context c, boolean on) {
+        prefs(c).edit().putBoolean(HomeComposition.PREF_KEY, on).apply();
+    }
+
     public static String getClockStyle(Context c) {
         return prefs(c).getString("clock_style", CLOCK_STYLE_DUO);
     }
@@ -1228,7 +1238,8 @@ public final class Scenes {
                             + getCustomClockPos(ctx) + "|" + getLockClockPos(ctx) + "|"
                             + CustomMedia.getCustomSceneTimestamp(ctx, cSlot) + "|"
                             + CustomMedia.getCustomLockTimestamp(ctx) + "|"
-                            + buildGreeting(ctx) + "|" + w + "x" + h;
+                            + buildGreeting(ctx) + "|" + w + "x" + h + "|ed="
+                            + (!lockScreenMode && isHomeEditorial(ctx));
                     if (!frameKey.equals(cachedFrameKey) || cachedFrameBmp == null
                             || cachedFrameBmp.getWidth() != w || cachedFrameBmp.getHeight() != h) {
                         if (cachedFrameBmp == null || cachedFrameBmp.getWidth() != w || cachedFrameBmp.getHeight() != h) {
@@ -1293,6 +1304,15 @@ public final class Scenes {
                         new float[]{0f, 0.48f, 1f}, Shader.TileMode.CLAMP));
             }
             canvas.drawRect(0, 0, w, h, shadePaint);
+
+            // Editorial Home: left-aligned solid masthead. Lock screen keeps the clock below.
+            if (!lockScreenMode && isHomeEditorial(getContext())) {
+                drawEditorialHome(canvas, ls, w, h);
+                if (layerSave) {
+                    canvas.restore();
+                }
+                return;
+            }
 
             // 2b. Local halo behind the clock: a soft dark pool that only appears on artwork
             // bright enough to swallow the frosted digits.
@@ -1519,6 +1539,57 @@ public final class Scenes {
             if (layerSave) {
                 canvas.restore();
             }
+        }
+
+        private final TextPaint edGreetPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint edClockPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint edInfoPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint edScrimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        /** Drawn into the cached frame bitmap (redrawn once a minute), so no per-frame allocation. */
+        private void drawEditorialHome(Canvas canvas, LoadedScene ls, int w, int h) {
+            Context ctx = getContext();
+            HomeComposition.Metrics m = HomeComposition.compute(w, h, 1, 1f);
+
+            // Calm dark scrim: a left-weighted wash behind the masthead plus a soft dock floor.
+            edScrimPaint.setShader(new LinearGradient(0, 0, w * 0.62f, 0,
+                    new int[]{Color.argb(120, 6, 8, 14), Color.argb(54, 6, 8, 14), Color.TRANSPARENT},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawRect(0, 0, w * 0.62f, h * 0.62f, edScrimPaint);
+            edScrimPaint.setShader(new LinearGradient(0, h * 0.62f, 0, h,
+                    new int[]{Color.TRANSPARENT, Color.argb(96, 4, 6, 12)},
+                    null, Shader.TileMode.CLAMP));
+            canvas.drawRect(0, h * 0.62f, w, h, edScrimPaint);
+            edScrimPaint.setShader(null);
+
+            if (ls.fg != null) {
+                drawCenterCrop(canvas, ls.fg, w, h);
+            }
+
+            edGreetPaint.setTypeface(Ui.font(ctx, "medium"));
+            edGreetPaint.setTextSize(13f * m.u);
+            edGreetPaint.setLetterSpacing(0.015f);
+            edGreetPaint.setColor(Color.argb(230, 244, 246, 250));
+            edGreetPaint.setShadowLayer(8f * m.u, 0f, 1.5f * m.u, Color.argb(150, 0, 0, 0));
+            canvas.drawText(buildGreeting(ctx), m.left, m.greetBaseline, edGreetPaint);
+
+            java.util.Calendar now = java.util.Calendar.getInstance();
+            edClockPaint.setTypeface(Ui.font(ctx, "display"));
+            edClockPaint.setTextSize(m.clockTextPx);
+            edClockPaint.setLetterSpacing(-0.02f);
+            edClockPaint.setColor(Color.argb(250, 250, 250, 252));
+            edClockPaint.setShadowLayer(14f * m.u, 0f, 2f * m.u, Color.argb(130, 0, 0, 0));
+            canvas.drawText(HomeComposition.clockText(now.get(java.util.Calendar.HOUR_OF_DAY),
+                    now.get(java.util.Calendar.MINUTE), isClock24h(ctx)), m.left, m.clockBaseline, edClockPaint);
+
+            String desc = weatherDesc != null && !weatherDesc.isEmpty() ? I18n.t(ctx, weatherDesc) : null;
+            edInfoPaint.setTypeface(Ui.font(ctx, "medium"));
+            edInfoPaint.setTextSize(14f * m.u);
+            edInfoPaint.setLetterSpacing(0.01f);
+            edInfoPaint.setColor(Color.argb(240, 246, 247, 251));
+            edInfoPaint.setShadowLayer(8f * m.u, 0f, 1.5f * m.u, Color.argb(150, 0, 0, 0));
+            canvas.drawText(HomeComposition.infoLine(I18n.formatSceneDate(ctx, new Date()),
+                    weatherTemp, desc), m.left, m.dateBaseline, edInfoPaint);
         }
 
         private static String buildGreeting(Context c) {

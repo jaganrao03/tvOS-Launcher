@@ -72,6 +72,11 @@ final class SceneHome {
         Profiles.homePrefs(c).edit().putBoolean(KEY_WEATHER_SHORTCUT, enabled).apply();
     }
 
+    /** Editorial Home layout (pref home_editorial, default on). Re-read in applyEditorialLayout(). */
+    boolean editorial;
+    private FrameLayout.LayoutParams shelfLp;
+    private FrameLayout.LayoutParams dockLp;
+
     LinearLayout shelfBox;
     TextView shelfHeader;
     LinearLayout shelfRow;
@@ -112,6 +117,7 @@ final class SceneHome {
 
     SceneHome(MainActivity host) {
         this.host = host;
+        this.editorial = Scenes.isHomeEditorial(host);
         this.focusedDockIdx = host.prefs.getInt("last_dock_idx", 0);
         this.sceneView = new Scenes.SceneView(host);
         this.sceneView.setOnSceneChangedListener(bg -> {
@@ -168,7 +174,7 @@ final class SceneHome {
         int pad = dp(3);
         whoBar.setPadding(pad, pad, pad, pad);
         MainActivity.LiquidGlass whoGlass = new MainActivity.LiquidGlass(
-                dp(22), 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
+                dp(22), editorial ? 0x7A12141A : 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
         whoGlass.lens = dp(5);
         whoGlass.rimStrength = 0.45f;
         whoBar.setBackground(whoGlass);
@@ -217,7 +223,7 @@ final class SceneHome {
         weatherBtn.setOrientation(LinearLayout.HORIZONTAL);
         weatherBtn.setGravity(Gravity.CENTER);
         MainActivity.LiquidGlass weatherGlass = new MainActivity.LiquidGlass(
-                mSize / 2f, 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
+                mSize / 2f, editorial ? 0x7A12141A : 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
         weatherGlass.lens = dp(5);
         weatherGlass.rimStrength = 0.45f;
         weatherBtn.setBackground(weatherGlass);
@@ -255,7 +261,7 @@ final class SceneHome {
         moonBtn.setOrientation(LinearLayout.HORIZONTAL);
         moonBtn.setGravity(Gravity.CENTER);
         MainActivity.LiquidGlass moonGlass = new MainActivity.LiquidGlass(
-                mSize / 2f, 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
+                mSize / 2f, editorial ? 0x7A12141A : 0x6614161C, host.glassSource, host.screenW, host.screenH, host.unit);
         moonGlass.lens = dp(5);
         moonGlass.rimStrength = 0.45f;
         moonBtn.setBackground(moonGlass);
@@ -369,7 +375,7 @@ final class SceneHome {
         shelfBox.setVisibility(View.GONE);
 
         shelfHeader = new TextView(host);
-        Ui.textSize(shelfHeader, 11.5f);
+        Ui.textSize(shelfHeader, editorial ? 12.5f : 11.5f);
         shelfHeader.setTypeface(Ui.font(host, "semibold"));
         shelfHeader.setTextColor(0xC7F4F4F6);
         shelfHeader.setShadowLayer(dp(6), 0, dp(1), 0x80000000);
@@ -392,12 +398,27 @@ final class SceneHome {
                 Gravity.TOP | Gravity.START);
         slp.leftMargin = dp(40);
         slp.rightMargin = dp(40);
-        slp.topMargin = dp(312);
+        slp.topMargin = dp(editorial ? HomeComposition.SHELF_HEADER_TOP_U : 312);
+        shelfLp = slp;
         overlay.addView(shelfBox, slp);
+    }
+
+    /** Re-reads home_editorial so the Settings toggle applies on return to Home. */
+    void applyEditorialLayout() {
+        boolean now = Scenes.isHomeEditorial(host);
+        if (now == editorial || shelfLp == null || dockLp == null) return;
+        editorial = now;
+        shelfLp.topMargin = dp(editorial ? HomeComposition.SHELF_HEADER_TOP_U : 312);
+        dockLp.bottomMargin = dp(editorial ? HomeComposition.DOCK_CLEARANCE_U : 14);
+        shelfBox.setLayoutParams(shelfLp);
+        dockContainer.setLayoutParams(dockLp);
+        lastWatchSig = "";
+        sceneView.invalidate();
     }
 
     void refreshKeepWatching() {
         if (shelfRow == null) return;
+        applyEditorialLayout();
         shelfHeader.setText(I18n.s(host, "Keep watching", "İzlemeye devam et"));
         if (!host.cwEnabled() || moreExpanded) {
             shelfBox.setVisibility(View.GONE);
@@ -454,9 +475,10 @@ final class SceneHome {
         }
         shelfBox.setVisibility(View.VISIBLE);
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < cards.size() && i < 3; i++) {
+        int shown = HomeComposition.shelfCount(cards.size());
+        for (int i = 0; i < shown; i++) {
             WatchCardData c = cards.get(i);
-            sb.append(c.key).append('|').append(c.title).append('|').append(c.subtitle).append('|').append(c.progress).append(';');
+            sb.append(editorial).append(c.key).append('|').append(c.title).append('|').append(c.subtitle).append('|').append(c.progress).append(';');
         }
         String sig = sb.toString();
         if (sig.equals(lastWatchSig) && !shelfCards.isEmpty()) {
@@ -465,10 +487,10 @@ final class SceneHome {
         lastWatchSig = sig;
         shelfRow.removeAllViews();
         shelfCards.clear();
-        int cardW = dp(282);
-        int cardH = dp(64);
-        int gap = dp(12);
-        for (int i = 0; i < cards.size() && i < 3; i++) {
+        int cardW = dp(HomeComposition.CARD_W_U);
+        int cardH = dp(editorial ? HomeComposition.CARD_H_U : 64);
+        int gap = dp(HomeComposition.CARD_GAP_U);
+        for (int i = 0; i < shown; i++) {
             final int idx = i;
             WatchCardData data = cards.get(i);
             View card = buildWatchCard(data, idx, cardW, cardH);
@@ -483,8 +505,8 @@ final class SceneHome {
         LinearLayout card = new LinearLayout(host);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        int pad = dp(8);
-        card.setPadding(pad, pad, dp(12), pad);
+        int pad = dp(editorial ? 10 : 8);
+        card.setPadding(pad, pad, dp(editorial ? 14 : 12), pad);
         card.setFocusable(true);
         card.setClickable(true);
         card.setLongClickable(true);
@@ -492,7 +514,7 @@ final class SceneHome {
 
         float r = dp(15);
         MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
-                r, 0x5C1E141C, host.glassSource, host.screenW, host.screenH, host.unit);
+                r, editorial ? 0x7A12141A : 0x5C1E141C, host.glassSource, host.screenW, host.screenH, host.unit);
         glass.lens = dp(6);
         glass.rimStrength = 0.42f;
         card.setBackground(glass);
@@ -503,7 +525,7 @@ final class SceneHome {
         focusRing.setStroke(dp(2), Color.WHITE);
 
         // Left thumbnail (16:9)
-        int tw = dp(84), th = dp(48);
+        int tw = dp(editorial ? 114 : 84), th = dp(editorial ? 64 : 48);
         ImageView thumb = new ImageView(host);
         thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
         GradientDrawable tbg = new GradientDrawable();
@@ -520,7 +542,7 @@ final class SceneHome {
         body.setOrientation(LinearLayout.VERTICAL);
         body.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        blp.leftMargin = dp(10);
+        blp.leftMargin = dp(editorial ? 12 : 10);
         card.addView(body, blp);
 
         // App icon + uppercase app name
@@ -539,7 +561,7 @@ final class SceneHome {
             metaRow.addView(aiv, alp);
         }
         TextView appTxt = new TextView(host);
-        Ui.textSize(appTxt, 8f);
+        Ui.textSize(appTxt, editorial ? 9f : 8f);
         appTxt.setTypeface(Ui.font(host, "semibold"));
         appTxt.setTextColor(0xB8F4F4F6);
         appTxt.setLetterSpacing(0.06f);
@@ -551,7 +573,7 @@ final class SceneHome {
 
         // Title
         TextView titleTxt = new TextView(host);
-        Ui.textSize(titleTxt, 11.5f);
+        Ui.textSize(titleTxt, editorial ? 13.5f : 11.5f);
         titleTxt.setTypeface(Ui.font(host, "semibold"));
         titleTxt.setTextColor(0xFFF4F4F6);
         titleTxt.setSingleLine(true);
@@ -564,7 +586,7 @@ final class SceneHome {
 
         // Subtitle
         TextView subTxt = new TextView(host);
-        Ui.textSize(subTxt, 9.2f);
+        Ui.textSize(subTxt, editorial ? 10.5f : 9.2f);
         subTxt.setTypeface(Ui.font(host, "regular"));
         subTxt.setTextColor(0xB8F4F4F6);
         subTxt.setSingleLine(true);
@@ -583,20 +605,20 @@ final class SceneHome {
         flBg.setCornerRadius(dp(1.5f));
         flBg.setColor(0xEBFFFFFF);
         barFill.setBackground(flBg);
-        int maxBarW = cardW - tw - dp(30);
-        int fillW = Math.max(0, Math.round(maxBarW * Math.max(0f, Math.min(1f, d.progress))));
+        int maxBarW = cardW - tw - dp(editorial ? 36 : 30);
+        int fillW = HomeComposition.progressFillPx(maxBarW, d.progress);
         barTrack.addView(barFill, new FrameLayout.LayoutParams(fillW, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout.LayoutParams prlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(2.5f));
         prlp.topMargin = dp(4.5f);
         body.addView(barTrack, prlp);
-        if (d.progress < 0) barTrack.setVisibility(View.GONE);
+        if (!HomeComposition.progressVisible(d.progress)) barTrack.setVisibility(View.GONE);
 
         card.setOnFocusChangeListener((v, has) -> {
             if (has) focusedShelfIdx = index;
             v.setForeground(has ? focusRing : null);
-            v.animate().withLayer().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
-                    .translationY(has ? -dp(4) : 0)
+            v.animate().withLayer().scaleX(has ? HomeComposition.FOCUS_SCALE : 1f).scaleY(has ? HomeComposition.FOCUS_SCALE : 1f)
+                    .translationY(has ? -dp(HomeComposition.FOCUS_LIFT_U) : 0)
                     .translationZ(has ? dp(14) : 0)
                     .setDuration(115).setInterpolator(MainActivity.LIFT).start();
         });
@@ -695,7 +717,7 @@ final class SceneHome {
         dockBox.setPadding(padH, padV, padH, padV);
 
         MainActivity.LiquidGlass dockGlass = new MainActivity.LiquidGlass(
-                dp(23), 0x541E141C, host.glassSource, host.screenW, host.screenH, host.unit);
+                dp(23), editorial ? 0x7A12141A : 0x541E141C, host.glassSource, host.screenW, host.screenH, host.unit);
         dockGlass.lens = dp(10);
         dockGlass.rimStrength = 0.38f;
         dockBox.setBackground(dockGlass);
@@ -707,7 +729,8 @@ final class SceneHome {
         FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        dlp.bottomMargin = dp(14);
+        dlp.bottomMargin = dp(editorial ? HomeComposition.DOCK_CLEARANCE_U : 14);
+        dockLp = dlp;
         overlay.addView(dockContainer, dlp);
     }
 

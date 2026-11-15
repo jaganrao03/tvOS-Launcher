@@ -267,6 +267,8 @@ public class MainActivity extends Activity {
     int edgeGlowStrength;
     String activeLang;
     String activeLook;
+    /** home_editorial value this activity was built with; a change on resume recreates Home. */
+    boolean activeHomeEditorial;
 
     final Runnable shelfUpdate = () -> {
         if (focusedIndex >= 0 && focusedIndex < shown.size()) {
@@ -295,6 +297,7 @@ public class MainActivity extends Activity {
         focusedIndex = Math.max(0, prefs.getInt("last_classic_idx", 0));
         activeLang = I18n.getLang(this);
         activeLook = Scenes.getLook(this);
+        activeHomeEditorial = Scenes.isHomeEditorial(this);
 
         android.graphics.Point size = Ui.screen(this);
         screenW = size.x;
@@ -463,7 +466,8 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (!Profiles.current(this).id.equals(boundProfileId)
-                || !I18n.getLang(this).equals(activeLang) || !Scenes.getLook(this).equals(activeLook)) {
+                || !I18n.getLang(this).equals(activeLang) || !Scenes.getLook(this).equals(activeLook)
+                || HomeComposition.styleChanged(activeHomeEditorial, Scenes.isHomeEditorial(this))) {
             recreate();
             return;
         }
@@ -3503,6 +3507,9 @@ public class MainActivity extends Activity {
             e.defaultLabel = TV_SETTINGS.equals(e.pkg)
                     ? I18n.s(this, "Settings", "Ayarlar")
                     : ri.loadLabel(pm).toString();
+            // Cobalt's upstream label is YouTube; identify the installed TizenTube build accurately.
+            // Explicit per-profile custom labels still win, and saved pin keys never change.
+            if ("io.gh.reisxd.tizentube.cobalt".equals(e.pkg)) e.defaultLabel = "TizenTube";
             e.label = getCustomAppName(this, e.key, e.pkg, e.defaultLabel);
             e.banner = leanback ? ai.loadBanner(pm) : null;
             e.icon = ri.loadIcon(pm);
