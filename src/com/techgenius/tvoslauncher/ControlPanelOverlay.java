@@ -339,7 +339,7 @@ public final class ControlPanelOverlay {
             }, true));
         }
         if (isItemEnabled(c, ITEM_DND)) {
-            capsules.add(new CapsuleSpec("moon", I18n.s(c, "Do Not Disturb", "Rahatsız Etmeyin"),
+            capsules.add(new CapsuleSpec("moon", compactLabel(c, "Quiet", "Sessiz", "Do Not Disturb", "Rahatsız Etmeyin"),
                     () -> dndState(c), v -> toggleDnd(c), false));
         }
         if (isItemEnabled(c, ITEM_AUDIO)) {
@@ -349,14 +349,16 @@ public final class ControlPanelOverlay {
             }, false));
         }
         if (isItemEnabled(c, ITEM_TIMER)) {
-            capsules.add(new CapsuleSpec("timer", I18n.s(c, "Sleep Timer", "Uyku Zamanlayıcısı"),
+            capsules.add(new CapsuleSpec("timer", compactLabel(c, "Sleep", "Uyku", "Sleep Timer", "Uyku Zamanlayıcısı"),
                     () -> timerState(c), v -> cycleSleepTimer(c), false));
         }
         if (isItemEnabled(c, ITEM_AMBIENT)) {
             boolean lockMode = isAmbientLockScreenMode(c);
             capsules.add(new CapsuleSpec("ambient",
-                    lockMode ? I18n.s(c, "Lock Screen", "Kilit Ekranı") : I18n.s(c, "Ambient Mode", "Ortam Modu"),
-                    () -> lockMode ? I18n.s(c, "Lock Now", "Şimdi Kilitle") : I18n.s(c, "Screensaver", "Ekran Koruyucu"),
+                    lockMode ? compactLabel(c, "Lock", "Kilit", "Lock Screen", "Kilit Ekranı")
+                            : compactLabel(c, "Ambient", "Ortam", "Ambient Mode", "Ortam Modu"),
+                    () -> lockMode ? compactLabel(c, "Now", "Şimdi", "Lock Now", "Şimdi Kilitle")
+                            : compactLabel(c, "Saver", "Koruyucu", "Screensaver", "Ekran Koruyucu"),
                     v -> {
                         dismissAll(c);
                         startAmbientMode(c);
@@ -637,7 +639,7 @@ public final class ControlPanelOverlay {
     }
 
     public static String memoryState(Context c) {
-        return Math.round(memoryUsed(c) * 100) + I18n.s(c, "% used · Recent Apps", "% kullanımda · Son Uygulamalar");
+        return Math.round(memoryUsed(c) * 100) + compactLabel(c, "% used", "% kullanımda", "% used · Recent Apps", "% kullanımda · Son Uygulamalar");
     }
 
     private static void attachMemoryBar(Context c, View tile, float unit) {
@@ -1138,6 +1140,14 @@ public final class ControlPanelOverlay {
             } catch (Exception ignored) { }
         }
         return false;
+    }
+
+    /** Compact EN/TR label; other languages keep the original English key so their dictionary entry still applies. */
+    private static String compactLabel(Context c, String en, String tr, String origEn, String origTr) {
+        String lang = I18n.getLang(c);
+        if (I18n.LANG_EN.equals(lang)) return en;
+        if (I18n.LANG_TR.equals(lang)) return tr;
+        return I18n.s(c, origEn, origTr);
     }
 
     private static int dp(float unit, float u) {

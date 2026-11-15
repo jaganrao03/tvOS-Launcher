@@ -25,7 +25,23 @@ final class Inputs {
     static final class Input {
         String id, label;
         int type;
-        boolean passthrough, disconnected, usb;
+        boolean passthrough, disconnected, usb, custom;
+    }
+
+    /**
+     * Gives duplicate generic tuners ("TV", not user-labelled) the names "Tuner 1", "Tuner 2"...,
+     * ordered by full hardware id so the numbering does not depend on enumeration order.
+     * A lone generic tuner, custom labels and meaningful OEM names are left alone.
+     */
+    static void numberDuplicateTuners(List<Input> inputs) {
+        List<Input> generic = new ArrayList<>();
+        for (Input in : inputs) {
+            if (in.type == TvInputInfo.TYPE_TUNER && !in.custom
+                    && ("TV".equalsIgnoreCase(in.label) || "Tuner".equalsIgnoreCase(in.label))) generic.add(in);
+        }
+        if (generic.size() < 2) return;
+        generic.sort((a, b) -> a.id.compareTo(b.id));
+        for (int i = 0; i < generic.size(); i++) generic.get(i).label = "Tuner " + (i + 1);
     }
 
     /** File/media apps that can browse a USB drive, in order of preference. */
@@ -72,6 +88,7 @@ final class Inputs {
                 in.type = info.getType();
                 in.passthrough = info.isPassthroughInput();
                 CharSequence custom = info.loadCustomLabel(c), label = info.loadLabel(c);
+                in.custom = custom != null && custom.length() > 0;
                 in.label = custom != null && custom.length() > 0 ? custom.toString() : label != null ? tidy(label.toString(), in.type) : "Input";
                 in.disconnected = tm.getInputState(in.id) == TvInputManager.INPUT_STATE_DISCONNECTED;
                 out.add(in);
@@ -79,6 +96,7 @@ final class Inputs {
                 // skip inputs that can't be read
             }
         }
+        numberDuplicateTuners(out);
         out.sort((a, b) -> Integer.compare(rank(a), rank(b)) != 0 ? Integer.compare(rank(a), rank(b))
                 : a.label.compareToIgnoreCase(b.label));
         // A plugged-in USB drive shows as its own source (opens the TV's file or media app).
@@ -114,7 +132,7 @@ final class Inputs {
 
     /** "HDMI1" -> "HDMI 1", "AV1" -> "AV 1"; tuners read "TV". */
     private static String tidy(String s, int type) {
-        if (type == TvInputInfo.TYPE_TUNER && (s.toUpperCase().contains("TV") || s.isEmpty())) return "TV";
+        if (type == TvInputInfo.TYPE_TUNER && s.trim().matches("(?i)|[AD]?TV")) return "TV";
         return s.replaceAll("^([A-Za-z]+)(\\d+)$", "$1 $2");
     }
 
