@@ -1553,58 +1553,13 @@ public class SettingsActivity extends Activity {
         LocalAdb.probePortAsync(this, () -> runOnUiThread(this::refreshAll));
     }
 
-    private boolean checkingLatestRelease = false;
-
     void pageUpdates() {
-        section(tr("UPDATES", "GÜNCELLEMELER"));
-        row(tr("Automatic updates", "Otomatik güncellemeler"),
-                () -> AppUpdater.isAutoUpdateEnabled(this) ? tr("On", "Açık") : tr("Off", "Kapalı"),
-                () -> {
-                    boolean next = !AppUpdater.isAutoUpdateEnabled(this);
-                    AppUpdater.setAutoUpdateEnabled(this, next);
-                    refreshAll();
-                    showStatusMsg(next
-                            ? tr("Automatic updates enabled.", "Otomatik güncellemeler etkinleştirildi.")
-                            : tr("Automatic updates disabled.", "Otomatik güncellemeler devre dışı bırakıldı."));
-                    if (next) {
-                        AppUpdater.checkAutoUpdateIfNeeded(this);
-                    }
-                });
-        row(tr("Check for updates", "Güncellemeleri kontrol et"),
-                () -> tr("Check now ›", "Şimdi kontrol et ›"),
-                () -> AppUpdater.manualCheckAndPrompt(this, this::refreshAll));
-
         section(tr("VERSION INFO", "SÜRÜM BİLGİSİ"));
         infoRow(tr("Current version", "Mevcut sürüm"), "v" + AppUpdater.getCurrentVersion(this), null);
-        infoRowDynamic(tr("GitHub release latest version", "GitHub son sürüm"),
-                () -> {
-                    String latest = AppUpdater.getCachedLatestVersion(this);
-                    if (latest != null && !latest.isEmpty()) {
-                        return "v" + latest;
-                    }
-                    return checkingLatestRelease
-                            ? tr("Checking…", "Kontrol ediliyor…")
-                            : tr("Tap Check for updates", "Güncellemeleri kontrol et'e basın");
-                },
-                null);
-
-        infoNote(tr("Checks GitHub Releases (techgenius1/tvOS-Launcher) for the latest APK and installs updates directly on your TV.",
-                "En güncel APK için GitHub Sürümlerini (techgenius1/tvOS-Launcher) kontrol eder ve güncellemeleri doğrudan TV'nize kurar."));
-
-        if (!checkingLatestRelease) {
-            checkingLatestRelease = true;
-            refreshAll();
-            AppUpdater.checkForUpdates(this, (success, latestVersion, downloadUrl, updateAvailable, errorMsg) -> {
-                checkingLatestRelease = false;
-                if (!isFinishing()) {
-                    refreshAll();
-                    if (success && updateAvailable) {
-                        AppUpdater.showUpdateAvailableDialog(this, latestVersion, downloadUrl,
-                                AppUpdater.getCachedChangelog(this), this::refreshAll);
-                    }
-                }
-            });
-        }
+        infoRow(tr("Update channel", "Güncelleme kanalı"),
+                tr("Custom source build", "Özel kaynak derlemesi"), null);
+        infoNote(tr("Upstream release checks and APK installation are removed from this custom build. Updates are built locally from reviewed source and installed separately with the same signing key. Your launcher data is kept.",
+                "Bu özel derlemede üst kaynak sürüm kontrolleri ve APK yükleme kaldırıldı. Güncellemeler incelenmiş kaynak kodundan yerel olarak derlenir ve aynı imzalama anahtarıyla ayrıca yüklenir. Başlatıcı verileriniz korunur."));
     }
 
     private void showVolumeFixModeSelectorDialog() {
