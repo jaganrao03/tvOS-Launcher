@@ -31,6 +31,9 @@ final class Profiles {
             "Jagan Jaggu", "Aadarsha Kutumbam", "Harshu", "Jagan Jaggu V2"};
     /** One-time guard so this sync never re-imposes names after the user edits them. */
     private static final String NUVIO_SYNCED = "nuvio_profiles_synced_v1";
+    /** Extra launcher-only profiles, added once. The "Naveen" family profile lives here. */
+    static final String[] EXTRA_PROFILES = {"Naveen"};
+    private static final String EXTRA_ADDED = "family_profiles_added_v1";
 
     static boolean canAdd(Context c) {
         return list(c).size() < MAX;
@@ -130,6 +133,31 @@ final class Profiles {
                 }
             }
             store(c).edit().putBoolean(NUVIO_SYNCED, true).commit();
+            if (changed) save(c, out);
+        }
+        // One-time: launcher-only profiles (the Naveen family profile), kept separate from the
+        // Nuvio account list so a later Nuvio sync can't drop them.
+        if (!store(c).getBoolean(EXTRA_ADDED, false)) {
+            boolean changed = false;
+            for (String name : EXTRA_PROFILES) {
+                boolean present = false;
+                for (Profile p : out) if (name.equals(p.name)) present = true;
+                if (present || out.size() >= MAX) continue;
+                int n = 1;
+                for (Profile x : out) {
+                    try {
+                        n = Math.max(n, Integer.parseInt(x.id.substring(1)) + 1);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                Profile p = new Profile();
+                p.id = "p" + n;
+                p.name = name;
+                p.color = out.size() % COLORS.length;
+                out.add(p);
+                changed = true;
+            }
+            store(c).edit().putBoolean(EXTRA_ADDED, true).commit();
             if (changed) save(c, out);
         }
         boolean fixed = false;

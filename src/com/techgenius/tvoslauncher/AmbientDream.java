@@ -1,9 +1,13 @@
 package com.techgenius.tvoslauncher;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -16,9 +20,15 @@ import android.os.SystemClock;
 import android.service.dreams.DreamService;
 import android.view.View;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -59,6 +69,16 @@ public class AmbientDream extends DreamService {
         private Typeface bold, regular;
         private int temp = Integer.MIN_VALUE;
 
+        /** Continue Watching artwork face: stills crossfade behind the chrome. */
+        private final List<String> artPaths = new ArrayList<>();
+        private final List<String> artTitles = new ArrayList<>();
+        private Bitmap art;
+        private float artAlpha = 0f;
+        private int artIndex = -1;
+        private long artShownAt;
+        private static final long ART_HOLD_MS = 15000L;
+        private static final long ART_FADE_MS = 900L;
+
         /** Burn-in guard: the whole composition drifts a few dp instead of sitting still. */
         private static final float DRIFT_DP = 6f;
         private static final long DRIFT_MS = 60000L;
@@ -66,6 +86,10 @@ public class AmbientDream extends DreamService {
         private final Runnable tick = new Runnable() {
             @Override
             public void run() {
+                if (!artPaths.isEmpty()
+                        && SystemClock.uptimeMillis() - artShownAt >= ART_HOLD_MS) {
+                    nextArtwork();
+                }
                 invalidate();
                 handler.postDelayed(this, 15000L);
             }
@@ -77,6 +101,61 @@ public class AmbientDream extends DreamService {
             bold = Ui.font(c, "semibold");
             regular = Ui.font(c, "regular");
             loadTemp(c);
+            loadArtwork(c);
+        }
+
+        /** Pulls this profile's Continue Watching stills; artwork 'art' is an absolute path. */
+        private void loadArtwork(Context c) {
+            try {
+                JSONArray a = MediaWatchService.Store.read(c);
+                for (int i = 0; i < a.length(); i++) {
+                    JSONObject o = a.optJSONObject(i);
+                    if (o == null || o.optBoolean("dismissed", false)) continue;
+                    String title = o.optString("title", "");
+                    String path = o.optString("art", "");
+                    if (title.length() == 0 || path.length() == 0) continue;
+                    if (!new File(path).exists()) continue;
+                    artTitles.add(title);
+                    artPaths.add(path);
+                }
+            } catch (Exception ignored) {
+                // Screensaver must never crash: without artwork it stays the clock face.
+            }
+        }
+
+        private void nextArtwork() {
+            if (artPaths.isEmpty()) return;
+            artIndex = (artIndex + 1) % artPaths.size();
+            Bitmap b = decode(artPaths.get(artIndex));
+            artShownAt = SystemClock.uptimeMillis();
+            if (b == null) return;
+            art = b;
+            artAlpha = 0f;
+            ValueAnimator va = ValueAnimator.ofFloat(0f, 1f);
+            va.setDuration(ART_FADE_MS);
+            va.addUpdateListener(a -> {
+                artAlpha = (float) a.getAnimatedValue();
+                invalidate();
+            });
+            va.start();
+        }
+
+        private Bitmap decode(String path) {
+            try {
+                BitmapFactory.Options probe = new BitmapFactory.Options();
+                probe.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(path, probe);
+                int target = Math.max(getWidth(), getHeight());
+                int sample = 1;
+                if (target > 0 && probe.outWidth > 0) {
+                    while (probe.outWidth / (sample * 2) >= target) sample *= 2;
+                }
+                BitmapFactory.Options o = new BitmapFactory.Options();
+                o.inSampleSize = sample;
+                return BitmapFactory.decodeFile(path, o);
+            } catch (Exception e) {
+                return null;
+            }
         }
 
         private void loadTemp(Context c) {
@@ -118,6 +197,10 @@ public class AmbientDream extends DreamService {
             cv.drawRect(0, 0, w, h, p);
             p.setShader(null);
 
+            // First real draw has a size now, so the first still can be decoded and faded in.
+            if (art == null && artIndex == -1 && !artPaths.isEmpty()) nextArtwork();
+            drawArtworkFace(cv, w, h);
+
             // Gentle bottom fall-off so text never fights the background.
             p.setShader(new LinearGradient(0, h * 0.55f, 0, h,
                     new int[]{Color.TRANSPARENT, 0xB0000000}, new float[]{0f, 1f}, Shader.TileMode.CLAMP));
@@ -134,7 +217,9 @@ public class AmbientDream extends DreamService {
             float pad = dp(48);
             drawWordmark(cv, pad, dp(30));
             drawClockAndTemp(cv, w - pad, dp(24));
-            drawPrivate(cv, pad, h * 0.5f);
+            String capTitle = (art != null && artIndex >= 0 && artIndex < artTitles.size())
+                    ? artTitles.get(artIndex) : null;
+            drawCaption(cv, pad, h * 0.5f, capTitle, w - pad * 2f);
 
             cv.restore();
         }
@@ -204,21 +289,57 @@ public class AmbientDream extends DreamService {
             }
         }
 
-        /** The quiet centre-left block lifted from Veil's idle face. */
-        private void drawPrivate(Canvas cv, float x, float cy) {
+        /** Centre-left block: Continue Watching title when a still is up, otherwise the idle line. */
+        private void drawCaption(Canvas cv, float x, float cy, String title, float maxWidth) {
+            String kicker = title != null ? "CONTINUE WATCHING" : "PRIVATE BY DESIGN";
+
             p.setTypeface(bold);
             p.setTextSize(sp(10));
             p.setColor(ACCENT);
             p.setLetterSpacing(0.14f);
-            cv.drawText("PRIVATE BY DESIGN", x, cy - sp(26), p);
+            cv.drawText(kicker, x, cy - sp(26), p);
             p.setLetterSpacing(0f);
+
+            String line = title != null ? title : "Private by design.";
 
             p.setTypeface(bold);
             p.setTextSize(sp(34));
             p.setColor(TEXT);
             p.setLetterSpacing(-0.03f);
-            cv.drawText("Private by design.", x, cy + sp(8), p);
+
+            // Trim to the real available width so a long episode title never runs off screen.
+            if (maxWidth > 0) {
+                if (p.measureText(line) > maxWidth) {
+                    String ell = "\u2026";
+                    int end = line.length();
+                    while (end > 1 && p.measureText(line.substring(0, end) + ell) > maxWidth) end--;
+                    line = line.substring(0, end) + ell;
+                }
+            } else if (line.length() > 58) {
+                line = line.substring(0, 57) + "\u2026";
+            }
+
+            cv.drawText(line, x, cy + sp(8), p);
             p.setLetterSpacing(0f);
+        }
+
+        /** Full-bleed centre-crop of the current still, held well back so the chrome reads. */
+        private void drawArtworkFace(Canvas cv, int w, int h) {
+            if (art == null || artAlpha <= 0f) return;
+            float bw = art.getWidth();
+            float bh = art.getHeight();
+            if (bw <= 0 || bh <= 0) return;
+
+            float scale = Math.max(w / bw, h / bh);
+            float dw = bw * scale;
+            float dh = bh * scale;
+            float left = (w - dw) / 2f;
+            float top = (h - dh) / 2f;
+
+            p.setShader(null);
+            p.setAlpha(Math.round(artAlpha * 255f * 0.55f));
+            cv.drawBitmap(art, null, new RectF(left, top, left + dw, top + dh), p);
+            p.setAlpha(255);
         }
 
         private static int withAlpha(int color, float a) {
