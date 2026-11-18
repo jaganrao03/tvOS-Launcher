@@ -92,6 +92,7 @@ final class SceneHome {
     private Bitmap demoArt1, demoArt2, demoArt3;
 
     boolean moreExpanded = false;
+    boolean dockHasOverflow = false;
     boolean backDownInHome = false;
     int focusedDockIdx = 0;
     int focusedShelfIdx = 0;
@@ -885,7 +886,7 @@ final class SceneHome {
             }
         }
 
-        int maxFirstRowApps = hasAnyOtherOrOverflow ? Math.max(1, cols - 2) : Math.max(1, cols - 1);
+        int maxFirstRowApps = Math.max(1, cols - 1);
         currentMaxSingleRowApps = maxFirstRowApps;
 
         List<MainActivity.AppEntry> visibleApps;
@@ -908,15 +909,9 @@ final class SceneHome {
         gearEntry.label = I18n.s(host, "Settings", "Ayarlar");
         dockEntries.add(gearEntry);
 
-        // Only show Other Apps (...) tile if there are apps in Other Apps or overflow apps from the dock
-        if (hasAnyOtherOrOverflow) {
-            MainActivity.AppEntry moreEntry = new MainActivity.AppEntry();
-            moreEntry.key = MORE_KEY;
-            moreEntry.label = moreExpanded
-                    ? I18n.s(host, "Fewer apps", "Daha az uygulama")
-                    : I18n.s(host, "Other apps", "Diğer uygulamalar");
-            dockEntries.add(moreEntry);
-        }
+        // Other apps are reached via Down from the dock's last row (Golden Summit
+        // redesign) rather than a persistent "..." gateway tile.
+        dockHasOverflow = hasAnyOtherOrOverflow;
 
         LinearLayout row = null;
         for (int i = 0; i < dockEntries.size(); i++) {
@@ -959,18 +954,19 @@ final class SceneHome {
         boolean isMore = MORE_KEY.equals(a.key);
         boolean isInputs = MainActivity.INPUTS_KEY.equals(a.key);
 
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(rad);
-        if (isGear || isMore || isInputs) {
-            bg.setColor(0x1EFFFFFF);
-            bg.setStroke(Math.max(1, dp(0.8f)), 0x24FFFFFF);
-        } else {
-            boolean hasCustom = CustomMedia.hasCustomAppIcon(host, a.key, a.pkg);
-            Bitmap logo = getSquareAppLogo(a.pkg);
-            bg.setColor((hasCustom || logo != null) ? 0xFF141519 : (a.color != 0 ? a.color : 0xFF1A1C22));
-        }
+        // Golden Summit: every dock tile (not just Gear/More/Inputs) sits on the
+        // same frosted-glass chip — linear-gradient(160deg,#fff16,#fff05) + 1px
+        // #fff26 border — matching prototype/v9/golden-launcher.html .art rule.
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{0x16FFFFFF, 0x05FFFFFF});
+        // Veil design: circular chips instead of rounded squares.
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setStroke(Math.max(1, dp(0.8f)), 0x26FFFFFF);
         tile.setBackground(bg);
-        tile.setOutlineProvider(host.roundedOutline(new float[]{rad}));
+        int inset = Math.max(dp(2), Math.round(size * 0.03f));
+        tile.setPadding(inset, inset, inset, inset);
+        tile.setOutlineProvider(host.roundedOutline(new float[]{size / 2f}));
         tile.setClipToOutline(true);
         // Zero elevation on dock tiles avoids Android's dark inner/outer shadow artifact bleeding through translucent Gear/More tiles
         tile.setElevation(0f);
@@ -991,28 +987,22 @@ final class SceneHome {
             iv.setImageBitmap(Glyphs.get("input_dock", inputGlyphSize, 0xEBF4F4F6));
             tile.addView(iv, host.match());
         } else {
-            boolean hasCustom = CustomMedia.hasCustomAppIcon(host, a.key, a.pkg);
-            Bitmap sq = getSquareAppIcon(a);
+            Bitmap sq = getCircleAppIcon(a);
             if (sq != null) {
-                iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                // Golden Summit: icons sit inset on the glass chip (object-fit:contain),
+                // not cropped edge-to-edge over a solid backdrop.
+                iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 iv.setImageBitmap(sq);
-                // Custom icons from App Icon Editor already match the exact preview bounds (1.0f);
-                // built-in app icons zoom slightly (+5%) for edge-to-edge infill
-                float z = hasCustom ? 1.0f : 1.05f;
-                iv.setScaleX(z);
-                iv.setScaleY(z);
                 tile.addView(iv, host.match());
             } else if (a.icon != null) {
-                iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                iv.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 iv.setImageDrawable(a.icon);
-                iv.setScaleX(1.05f);
-                iv.setScaleY(1.05f);
                 tile.addView(iv, host.match());
             }
         }
 
         GradientDrawable focusRing = new GradientDrawable();
-        focusRing.setCornerRadius(rad);
+        focusRing.setShape(GradientDrawable.OVAL);
         focusRing.setColor(Color.TRANSPARENT);
         focusRing.setStroke(dp(2.2f), Color.WHITE);
 
@@ -1285,6 +1275,25 @@ final class SceneHome {
             logoCache.put(cacheKey, bmp);
         }
         return bmp;
+    }
+
+    /** Veil-style circular app icon: the tile's square artwork, masked to a clean circle. */
+    Bitmap getCircleAppIcon(MainActivity.AppEntry a) {
+        if (a == null) return null;
+        String ck = "circle:" + (a.key != null ? a.key : a.pkg);
+        if (logoCache.containsKey(ck)) return logoCache.get(ck);
+        Bitmap sq = getSquareAppIcon(a);
+        if (sq == null) return null;
+        int s = 256;
+        Bitmap circle = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
+        Canvas cc = new Canvas(circle);
+        android.graphics.Path clip = new android.graphics.Path();
+        clip.addCircle(s / 2f, s / 2f, s / 2f, android.graphics.Path.Direction.CW);
+        cc.clipPath(clip);
+        Paint cp = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+        cc.drawBitmap(sq, new Rect(0, 0, sq.getWidth(), sq.getHeight()), new Rect(0, 0, s, s), cp);
+        logoCache.put(ck, circle);
+        return circle;
     }
 
     private Bitmap buildFullSquareIcon(MainActivity.AppEntry a) {
@@ -1976,6 +1985,12 @@ final class SceneHome {
                     int totalRows = (dockTiles.size() + cols - 1) / cols;
                     if (curRow + 1 < totalRows) {
                         focusDock(Math.min(dIdx + cols, dockTiles.size() - 1));
+                    } else if (!moreExpanded && dockHasOverflow) {
+                        // Golden Summit redesign: scrolling Down past the favorites
+                        // row reveals the full app library in place, no gateway tile.
+                        int priorCount = dockTiles.size();
+                        toggleMoreApps();
+                        focusDock(Math.min(priorCount, dockTiles.size() - 1));
                     }
                 }
                 return true;

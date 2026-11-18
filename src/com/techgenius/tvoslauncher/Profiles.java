@@ -23,8 +23,14 @@ import java.util.List;
 final class Profiles {
     private Profiles() { }
 
-    /** At most three profiles. */
-    static final int MAX = 3;
+    /** Up to six profiles; the Nuvio account currently exposes four. */
+    static final int MAX = 6;
+
+    /** Profile names mirrored from the Nuvio account, in Nuvio's order. */
+    static final String[] NUVIO_NAMES = {
+            "Jagan Jaggu", "Aadarsha Kutumbam", "Harshu", "Jagan Jaggu V2"};
+    /** One-time guard so this sync never re-imposes names after the user edits them. */
+    private static final String NUVIO_SYNCED = "nuvio_profiles_synced_v1";
 
     static boolean canAdd(Context c) {
         return list(c).size() < MAX;
@@ -94,6 +100,37 @@ final class Profiles {
             p1.name = "Jagan";
             p1.color = 0;
             out.add(p1);
+        }
+        // One-time: mirror the launcher's profiles onto the real Nuvio account profiles.
+        // Index-stable (p1 keeps the original storage), so each profile's home layout and
+        // Continue Watching survive; only names and the profile count change.
+        if (!store(c).getBoolean(NUVIO_SYNCED, false)) {
+            boolean changed = false;
+            for (int i = 0; i < NUVIO_NAMES.length; i++) {
+                Profile p;
+                if (i < out.size()) {
+                    p = out.get(i);
+                } else {
+                    int n = 1;
+                    for (Profile x : out) {
+                        try {
+                            n = Math.max(n, Integer.parseInt(x.id.substring(1)) + 1);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    p = new Profile();
+                    p.id = "p" + n;
+                    p.color = out.size() % COLORS.length;
+                    out.add(p);
+                    changed = true;
+                }
+                if (!NUVIO_NAMES[i].equals(p.name)) {
+                    p.name = NUVIO_NAMES[i];
+                    changed = true;
+                }
+            }
+            store(c).edit().putBoolean(NUVIO_SYNCED, true).commit();
+            if (changed) save(c, out);
         }
         boolean fixed = false;
         java.util.Set<String> used = new java.util.HashSet<>();
