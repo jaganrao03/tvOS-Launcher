@@ -117,6 +117,18 @@
             </intent-filter>
         </service>
 
+        <!-- Ambient screensaver: runs when the TV goes idle instead of a separate app. -->
+        <service
+            android:name=".AmbientDream"
+            android:exported="true"
+            android:label="tvOS Launcher – Ambient"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <!-- Presentation mode (ported from pb-marketer-tv): full-screen player + boot start. -->
         <activity
             android:name=".present.PresentationActivity"
